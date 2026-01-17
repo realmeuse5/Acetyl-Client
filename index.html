@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Acetyl Client</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+    <div id="header">
+        <h1>Acetyl Client</span></h1>
+    </div>
+
+    <div id="web-container">
+
+        <div id="sidebar">
+            <div id="user-sidebar">
+                <span id="username">Anonymous</span>
+                <span id="gear"><i class="fa-solid fa-gear"></i></span>
+            </div>
+        </div>
+
+        <div id="main">
+
+            <div id="chat-container">
+                <div id="messages"></div>
+            </div>
+
+            <input type="text" id="messageInput" placeholder="Message @[name of chat]">
+
+        </div>
+
+    </div>
+
+    <script type="module" src="JS/firebase-init.js"></script>
+    <script type="module" src="JS/chat.js"></script>
+
+</body>
+</html>
