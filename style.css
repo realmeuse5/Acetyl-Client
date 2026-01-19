@@ -185,6 +185,7 @@ input:focus {
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     font-weight: 600;
+    background-clip: transparent;
 }
 
 .admin-badge {

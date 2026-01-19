@@ -1,21 +1,127 @@
-import { remove, get, child } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+// IMPORTS
 import { db } from "./firebase-init.js";
-import { ref, push, onChildAdded } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+import { ref, push, onChildAdded, remove, get, child, set } 
+from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
-const messagesDiv = document.getElementById("messages");
-const input = document.getElementById("messageInput");
+
+// VARIABLES   
+let messagesDiv;
+let input;
+let usernameEl;
+let adminBtn;
+let myChatsContainer;
 
 let username = "Anonymous";
-
-// Admin credentials
-const ADMIN_KEY = "Ky3{*OxQ3#S*tFIw53$8ZJjjT"
-const ADMIN_PIN = "4123"
-
 let isAdmin = false;
 
-document.getElementById("adminLogin").addEventListener("click", () => {
+let currentChat = "public";
+let messagesRef = null;
+let unsubscribe = null;
+
+let myChats = [];
+
+// Admin credentials
+const ADMIN_KEY = "Ky3{*OxQ3#S*tFIw53$8ZJjjT";
+const ADMIN_PIN = "4123";
+
+
+// ONLOAD
+window.onload = () => {
+    // DOM elements
+    messagesDiv = document.getElementById("messages");
+    input = document.getElementById("messageInput");
+    usernameEl = document.getElementById("username");
+    adminBtn = document.getElementById("adminLogin");
+    myChatsContainer = document.getElementById("myChats");
+
+    loadSavedUser();
+
+    loadSavedChats();
+
+    validateSavedChats();
+
+    attachUIListeners();
+
+    switchChat("public");
+};
+
+
+// LOAD USER + CHATS 
+function loadSavedUser() {
+    const savedName = localStorage.getItem("username");
+    if (savedName) {
+        username = savedName;
+        usernameEl.textContent = username;
+    }
+
+    if (localStorage.getItem("isAdmin") === "true") {
+        isAdmin = true;
+        activateAdminUI();
+    }
+}
+
+function loadSavedChats() {
+    const saved = localStorage.getItem("myChats");
+    if (saved) {
+        myChats = JSON.parse(saved);
+        myChats.forEach(code => addChatToSidebar(code));
+    }
+}
+
+async function validateSavedChats() {
+    const validChats = [];
+
+    for (const code of myChats) {
+        const chatRef = ref(db, `chats/${code}`);
+        const snapshot = await get(chatRef);
+
+        if (snapshot.exists()) {
+            validChats.push(code);
+        } else {
+            console.log(`Removing deleted server: ${code}`);
+        }
+    }
+
+    myChats = validChats;
+    localStorage.setItem("myChats", JSON.stringify(myChats));
+
+    myChatsContainer.innerHTML = "";
+    myChats.forEach(code => addChatToSidebar(code));
+}
+
+
+// UI EVENT LISTENERS
+function attachUIListeners() {
+    document.getElementById("gear").addEventListener("click", changeUsername);
+    document.getElementById("publicChatBtn").addEventListener("click", () => switchChat("public"));
+    document.getElementById("createChatBtn").addEventListener("click", createChat);
+    document.getElementById("joinChatBtn").addEventListener("click", joinChat);
+
+    adminBtn.addEventListener("click", toggleAdmin);
+
+    input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") sendMessage();
+    });
+}
+
+
+// USERNAME MANAGEMENT
+function changeUsername() {
+    const name = prompt("Username:");
+    if (!name) return;
+
+    const cleaned = name.trim();
+    if (!cleaned || cleaned.length > 24 || /[.#$\[\]]/.test(cleaned)) return;
+
+    username = cleaned;
+    usernameEl.textContent = username;
+    localStorage.setItem("username", username);
+}
+
+
+// ADMIN LOGIN/LOGOUT
+function toggleAdmin() {
     if (!isAdmin) {
-        // Login
         const key = prompt("Admin Key:");
         if (!key) return;
 
@@ -30,100 +136,104 @@ document.getElementById("adminLogin").addEventListener("click", () => {
             alert("Invalid credentials.");
         }
     } else {
-        // Logout
         isAdmin = false;
         localStorage.removeItem("isAdmin");
         deactivateAdminUI();
     }
-});
+}
 
 function activateAdminUI() {
-    const usernameEl = document.getElementById("username");
-    const adminBtn = document.getElementById("adminLogin");
-
     adminBtn.textContent = "Logout";
-
-    const name = usernameEl.textContent;
-    usernameEl.innerHTML = `<span class="admin-badge">[ADMIN]</span><span class="admin-username">${name}</span>`;
+    usernameEl.innerHTML = `<span class="admin-badge">[ADMIN]</span><span class="admin-username">${username}</span>`;
 }
 
 function deactivateAdminUI() {
-    const usernameEl = document.getElementById("username");
-    const adminBtn = document.getElementById("adminLogin");
-
     adminBtn.textContent = "Admin Login";
-
-    const rawName = usernameEl.textContent.replace("[ADMIN]", "").trim();
-    usernameEl.textContent = rawName;
+    usernameEl.textContent = username;
 }
 
-// Load saved username on startup
-const savedName = localStorage.getItem("username");
-if (savedName) {
-    username = savedName;
-    document.getElementById("username").textContent = username;
+
+// CHAT SWITCHING
+async function switchChat(chatId) {
+    const chatRef = ref(db, `chats/${chatId}`);
+    const snapshot = await get(chatRef);
+
+    if (!snapshot.exists()) {
+        alert("Server not found.");
+        validateSavedChats();
+        switchChat("public");
+        return;
+    }
+    
+    currentChat = chatId;
+
+    if (unsubscribe) unsubscribe();
+
+    messagesRef = ref(db, `chats/${currentChat}/messages`);
+    messagesDiv.innerHTML = "";
+
+    unsubscribe = onChildAdded(messagesRef, (snapshot) => {
+        displayMessage(snapshot.val());
+    });
 }
 
-if (localStorage.getItem("isAdmin") === "true") {
-    isAdmin = true;
-    activateAdminUI();
+
+// CREATE/JOIN CHATS
+function createChat() {
+    const code = Math.random().toString(36).substring(2, 8);
+
+    set(ref(db, `chats/${code}`), { createdAt: Date.now() });
+
+    addChatToSidebar(code);
+    switchChat(code);
 }
 
-// Gear icon click → change username
-document.getElementById("gear").addEventListener("click", () => {
-    const name = prompt("Username:");
-    if (name === null) return; // user hit cancel
+async function joinChat() {
+    const code = prompt("Enter server code:");
+    if (!code) return;
 
-    const cleaned = name.trim();
-
-    if (cleaned.length === 0) {
+    // NEW: prevent joining twice
+    if (myChats.includes(code)) {
         return;
     }
 
-    if (cleaned.length > 24) {
+    const chatRef = ref(db, `chats/${code}`);
+    const snapshot = await get(chatRef);
+
+    if (!snapshot.exists()) {
+        alert("Server not found.");
         return;
     }
 
-    if (/[.#$\[\]]/.test(cleaned)) {
-        alert("Illegal Username");
-        return;
-    }
-
-    // Passed all checks → save it
-    username = cleaned;
-    document.getElementById("username").textContent = username;
-    localStorage.setItem("username", username);
-});
-
-function isNearBottom() {
-    const threshold = 200;
-    const distance = messagesDiv.scrollHeight - messagesDiv.scrollTop - messagesDiv.clientHeight;
-    return distance < threshold;
+    addChatToSidebar(code);
+    switchChat(code);
 }
 
-const messagesRef = ref(db, "messages");
-
-// SEND MESSAGE ON ENTER
-input.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
-        sendMessage();
+function addChatToSidebar(code) {
+    if (!myChats.includes(code)) {
+        myChats.push(code);
+        localStorage.setItem("myChats", JSON.stringify(myChats));
     }
-});
 
+    const btn = document.createElement("button");
+    btn.textContent = code;
+    btn.classList.add("chatButton");
+    btn.addEventListener("click", () => switchChat(code));
+
+    myChatsContainer.appendChild(btn);
+}
+
+
+// MESSAGE SENDING
 function sendMessage() {
     const text = input.value.trim();
-    if (text.length === 0) return;
-
-    if (text.length > 500) { 
-        alert("Nobody likes a spammer.");
-        return;
-    }
+    if (!text || text.length > 500) return;
 
     push(messagesRef, {
-        text: text,
-        username: username,
+        text,
+        username,
         timestamp: Date.now(),
-        isAdmin: isAdmin
+        isAdmin
     });
 
     enforceMessageLimit();
@@ -132,7 +242,6 @@ function sendMessage() {
 
 async function enforceMessageLimit() {
     const snapshot = await get(messagesRef);
-
     if (!snapshot.exists()) return;
 
     const messages = snapshot.val();
@@ -140,18 +249,15 @@ async function enforceMessageLimit() {
 
     if (keys.length > 50) {
         const excess = keys.length - 50;
-
         for (let i = 0; i < excess; i++) {
-            const keyToDelete = keys[i];
-            await remove(child(messagesRef, keyToDelete));
+            await remove(child(messagesRef, keys[i]));
         }
     }
 }
 
-// DISPLAY MESSAGES
-onChildAdded(messagesRef, (snapshot) => {
-    const msg = snapshot.val();
 
+// MESSAGE DISPLAY
+function displayMessage(msg) {
     const wrapper = document.createElement("div");
     wrapper.classList.add("message");
 
@@ -160,11 +266,12 @@ onChildAdded(messagesRef, (snapshot) => {
 
     const name = document.createElement("span");
     name.classList.add("username");
+
     if (msg.isAdmin) {
-    name.innerHTML = `
-        <span class="admin-badge">[ADMIN]</span>
-        <span class="admin-username">${msg.username}</span>
-    `;
+        name.innerHTML = `
+            <span class="admin-badge">[ADMIN]</span>
+            <span class="admin-username">${msg.username}</span>
+        `;
     } else {
         name.textContent = msg.username || "Anonymous";
     }
@@ -186,13 +293,13 @@ onChildAdded(messagesRef, (snapshot) => {
     wrapper.appendChild(header);
     wrapper.appendChild(text);
 
-    const shouldScroll = isNearBottom();
-
     messagesDiv.appendChild(wrapper);
+}
 
-    if (shouldScroll) {
-        messagesDiv.scrollTop = messagesDiv.scrollHeight;
-    }
 
-});
-
+// UTILITY FUNCTIONS
+function isNearBottom() {
+    const threshold = 200;
+    const distance = messagesDiv.scrollHeight - messagesDiv.scrollTop - messagesDiv.clientHeight;
+    return distance < threshold;
+}
