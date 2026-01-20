@@ -22,9 +22,11 @@
                 <span id="gear"><i class="fa-solid fa-gear"></i></span>
             </div>
             <button id="adminLogin">Admin Login</button>
-            <button id="publicChatBtn">Public Server</button>
-            <button id="createChatBtn">Create Server</button>
-            <button id="joinChatBtn">Join Server</button>
+            <button id="publicChatBtn" class="publicButton" data-chat="public">Public Server</button>
+            <button id="createChatBtn" class="actionButton"><i class="fa-sharp fa-solid fa-plus" style="margin-right: 20px"></i>Create Server</button>
+            <button id="joinChatBtn" class="actionButton"><i class="fa-solid fa-arrow-right-to-bracket" style="margin-right: 20px"></i>Join Server</button>
+            <p id="myChatsTitle">Server List</p>
+            <p id="noServersMsg">You have not joined any servers</p>
             <div id="myChats"></div>
         </div>
 

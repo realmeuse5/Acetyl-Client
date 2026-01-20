@@ -188,6 +188,14 @@ input:focus {
     background-clip: transparent;
 }
 
+.system-username {
+    font-weight: 600;
+    color: #afafaf;
+    font-size: 1.5rem;
+    display: flex;
+    margin-bottom: 10px;
+}
+
 .admin-badge {
     color: #ddd;
     font-size: 1.3rem;
@@ -209,3 +217,116 @@ input:focus {
     color: #888;
     margin-left: 10px;
 }
+
+.publicButton {
+    background-color: #121214;
+    border: none;
+    color: #dcddde;
+    font-size: 1.5rem;
+    font-weight: 500;
+    margin-top: 20px;
+    width: 94%;
+    padding: 10px;
+    border-radius: 8px;
+}
+
+.publicButton:hover {
+    background-color: #212124;
+    cursor: pointer;
+}
+
+.publicButton.active {
+    background-color: #29292d;
+    color: white;
+}
+
+.actionButton {
+    background-color: #121214;
+    border: none;
+    color: #dcddde;
+    font-size: 1.5rem;
+    font-weight: 500;
+    margin-top: 20px;
+    width: 94%;
+    padding: 10px;
+    border-radius: 8px;
+}
+
+.actionButton:hover {
+    background-color: #212124;
+    cursor: pointer;
+}
+
+#myChatsTitle {
+    margin-top: 30px;
+    color: #dcddde;
+    font-size: 1.2rem;
+    align-self: flex-start;
+    margin-left: 5%;
+}
+
+#noServersMsg {
+    margin-top: 10px;
+    color: #777;
+    font-size: 1rem;
+    align-self: flex-start;
+    margin-left: 5%;
+    display: none;
+}
+
+#myChats {
+    flex: 1;
+    overflow-y: auto;
+    width: 94%;
+}
+
+.chatRow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 6px;
+    padding: 10px;
+    border-radius: 8px;
+}
+
+.chatRow:hover {
+    background-color: #212124;
+}
+
+.chatRow.active {
+    background-color: #29292d;
+    color: white;
+}
+
+.chatButton {
+    flex: 1;
+    text-align: left;
+    background-color: transparent;
+    border: none;
+    color: #dcddde;
+    font-size: 1.3rem;
+}
+
+.chatButton:hover {
+    cursor: pointer;
+}
+
+.leaveChat {
+    cursor: pointer;
+    padding: 4px;
+    margin-left: 8px;
+    color: #aaa;
+    font-size: 14px;
+    user-select: none;
+    transition: 0.2s;
+}
+
+.leaveChat:hover {
+    color: #dcddde;
+}
+
+
+
+
+
+

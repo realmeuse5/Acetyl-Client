@@ -10,6 +10,7 @@ let input;
 let usernameEl;
 let adminBtn;
 let myChatsContainer;
+let msg;
 
 let username = "Anonymous";
 let isAdmin = false;
@@ -33,6 +34,8 @@ window.onload = () => {
     usernameEl = document.getElementById("username");
     adminBtn = document.getElementById("adminLogin");
     myChatsContainer = document.getElementById("myChats");
+    msg = document.getElementById("noServersMsg");
+
 
     loadSavedUser();
 
@@ -66,6 +69,7 @@ function loadSavedChats() {
         myChats = JSON.parse(saved);
         myChats.forEach(code => addChatToSidebar(code));
     }
+    updateNoServersMessage();
 }
 
 async function validateSavedChats() {
@@ -87,6 +91,7 @@ async function validateSavedChats() {
 
     myChatsContainer.innerHTML = "";
     myChats.forEach(code => addChatToSidebar(code));
+    updateNoServersMessage();
 }
 
 
@@ -167,6 +172,9 @@ async function switchChat(chatId) {
     
     currentChat = chatId;
 
+    // Highlight active chat
+    highlightActiveChat(chatId);
+
     if (unsubscribe) unsubscribe();
 
     messagesRef = ref(db, `chats/${currentChat}/messages`);
@@ -177,15 +185,49 @@ async function switchChat(chatId) {
     });
 }
 
+function highlightActiveChat(chatId) {
+    const rows = document.querySelectorAll(".chatRow");
+    const publicBtn = document.getElementById("publicChatBtn");
+
+    rows.forEach(row => {
+        if (row.dataset.chat === chatId) {
+            row.classList.add("active");
+        } else {
+            row.classList.remove("active");
+        }
+    });
+
+    // Handle public chat separately
+    if (chatId === "public") {
+        publicBtn.classList.add("active");
+    } else {
+        publicBtn.classList.remove("active");
+    }
+}
+
 
 // CREATE/JOIN CHATS
 function createChat() {
+    if (myChats.length >= 5) {
+        alert("Server limit reached");
+        return;
+    }
     const code = Math.random().toString(36).substring(2, 8);
 
     set(ref(db, `chats/${code}`), { createdAt: Date.now() });
 
     addChatToSidebar(code);
     switchChat(code);
+
+    // Auto message
+    push(ref(db, `chats/${code}/messages`), {
+    text: `Server created. Your server code is: ${code}`,
+    username: "Server Bot",
+    timestamp: Date.now(),
+    isAdmin: false,
+    isSystem: true
+});
+
 }
 
 async function joinChat() {
@@ -215,12 +257,59 @@ function addChatToSidebar(code) {
         localStorage.setItem("myChats", JSON.stringify(myChats));
     }
 
+    const row = document.createElement("div");
+    row.classList.add("chatRow");
+    row.dataset.chat = code;
+
+    // Create the chat button
     const btn = document.createElement("button");
     btn.textContent = code;
     btn.classList.add("chatButton");
+    btn.dataset.chat = code;
     btn.addEventListener("click", () => switchChat(code));
 
-    myChatsContainer.appendChild(btn);
+    // Create the leave (X) button
+    const leave = document.createElement("span");
+    leave.textContent = "✖";
+    leave.classList.add("leaveChat");
+
+    leave.addEventListener("click", (e) => {
+        e.stopPropagation();
+        leaveServer(code);
+    });
+
+    row.appendChild(btn);
+    row.appendChild(leave);
+
+    myChatsContainer.appendChild(row);
+    updateNoServersMessage();
+}
+
+function leaveServer(code) {
+    if (!confirm("Are you sure you want to leave this server?")) return;
+    if (code === "public") {
+        alert("You cannot leave the public chat.");
+        return;
+    }
+
+    myChats = myChats.filter(c => c !== code);
+    localStorage.setItem("myChats", JSON.stringify(myChats));
+
+    // Remove from sidebar
+    const rows = [...myChatsContainer.children];
+    const row = rows.find(r => r.querySelector("button").textContent === code);
+    if (row) row.remove();
+
+    switchChat("public");
+    updateNoServersMessage();
+}
+
+function updateNoServersMessage() {
+    if (myChats.length === 0) {
+        msg.style.display = "block";
+    } else {
+        msg.style.display = "none";
+    }
 }
 
 
@@ -267,13 +356,13 @@ function displayMessage(msg) {
     const name = document.createElement("span");
     name.classList.add("username");
 
-    if (msg.isAdmin) {
-        name.innerHTML = `
-            <span class="admin-badge">[ADMIN]</span>
-            <span class="admin-username">${msg.username}</span>
-        `;
+    if (msg.isSystem) {
+        name.textContent = msg.username;
+        name.classList.add("system-username");
+    } else if (msg.isAdmin) {
+        name.innerHTML = `<span class="admin-badge">[ADMIN]</span><span class="admin-username">${msg.username}</span>`;
     } else {
-        name.textContent = msg.username || "Anonymous";
+    name.textContent = msg.username || "Anonymous";
     }
 
     const time = document.createElement("span");
