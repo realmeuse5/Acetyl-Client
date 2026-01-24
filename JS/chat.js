@@ -1,8 +1,17 @@
 // IMPORTS
 import { db } from "./firebase-init.js";
-import { ref, push, onChildAdded, remove, get, child, set } 
-from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
-
+import { 
+    ref, 
+    push, 
+    onChildAdded, 
+    onChildRemoved, 
+    onChildChanged, 
+    remove, 
+    get, 
+    child, 
+    set,
+    onDisconnect
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
 // VARIABLES   
 let messagesDiv;
@@ -24,6 +33,13 @@ let myChats = [];
 // Admin credentials
 const ADMIN_KEY = "Ky3{*OxQ3#S*tFIw53$8ZJjjT";
 const ADMIN_PIN = "4123";
+
+// User ID
+let userId = localStorage.getItem("userId");
+if (!userId) {
+    userId = "u_" + Math.random().toString(36).substring(2, 10);
+    localStorage.setItem("userId", userId);
+}
 
 
 // ONLOAD
@@ -121,6 +137,13 @@ function changeUsername() {
     username = cleaned;
     usernameEl.textContent = username;
     localStorage.setItem("username", username);
+    myChats.forEach(code => {
+        const userRef = ref(db, `chats/${code}/activeUsers/${userId}`);
+        set(userRef, {
+            username: username,
+            lastSeen: Date.now()
+        });
+    });
 }
 
 
@@ -171,6 +194,7 @@ async function switchChat(chatId) {
     }
     
     currentChat = chatId;
+    setupPresence(chatId);
 
     // Highlight active chat
     highlightActiveChat(chatId);
@@ -300,6 +324,8 @@ function leaveServer(code) {
     const row = rows.find(r => r.querySelector("button").textContent === code);
     if (row) row.remove();
 
+    remove(ref(db, `chats/${code}/activeUsers/${userId}`));
+
     switchChat("public");
     updateNoServersMessage();
 }
@@ -383,6 +409,75 @@ function displayMessage(msg) {
     wrapper.appendChild(text);
 
     messagesDiv.appendChild(wrapper);
+
+    if (isNearBottom()) {
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+}
+
+
+// ACTIVE USERS PRESENCE
+let presenceRef = null;
+let presenceUnsubs = [];
+
+function setupPresence(chatId) {
+    console.log("setupPresence called for", chatId);
+
+    presenceUnsubs.forEach(unsub => unsub());
+    presenceUnsubs = [];
+
+    // Remove presence from previous chat
+    if (presenceRef) {
+        const oldUserRef = child(presenceRef, userId);
+        remove(oldUserRef);
+    }
+
+    presenceRef = ref(db, `chats/${chatId}/activeUsers`);
+    const userRef = child(presenceRef, userId);
+
+    // Auto-remove on disconnect
+    onDisconnect(userRef).remove();
+
+    set(userRef, {
+        username: username,
+        lastSeen: Date.now()
+    });
+
+    presenceUnsubs.push(onChildAdded(presenceRef, updateActiveUsersList));
+    presenceUnsubs.push(onChildRemoved(presenceRef, updateActiveUsersList));
+    presenceUnsubs.push(onChildChanged(presenceRef, updateActiveUsersList));
+
+    updateActiveUsersList();
+}
+
+async function updateActiveUsersList() {
+    const container = document.getElementById("activeUsers");
+    const emptyMsg = document.getElementById("noActiveUsersMsg");
+
+    if (!presenceRef) return;
+
+    const snapshot = await get(presenceRef);
+    container.innerHTML = "";
+
+    if (!snapshot.exists()) {
+        emptyMsg.style.display = "block";
+        return;
+    }
+
+    emptyMsg.style.display = "none";
+
+    const users = snapshot.val();
+
+    const sorted = Object.values(users).sort((a, b) =>
+        a.username.localeCompare(b.username)
+    );
+
+    sorted.forEach(u => {
+        const el = document.createElement("div");
+        el.classList.add("activeUser");
+        el.textContent = u.username;
+        container.appendChild(el);
+    });
 }
 
 

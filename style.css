@@ -108,7 +108,7 @@ input:focus {
     flex: 1;
     margin-left: 15px;
     color: #dcddde;
-    font-size: 1.7rem;
+    font-size: 1.5rem;
     display: inline-block;  
     max-width: 70%;
     white-space: nowrap;
@@ -275,9 +275,10 @@ input:focus {
 }
 
 #myChats {
-    flex: 1;
+    flex: 0 0 auto;
     overflow-y: auto;
     width: 94%;
+    height: auto;
 }
 
 .chatRow {
@@ -324,6 +325,48 @@ input:focus {
 .leaveChat:hover {
     color: #dcddde;
 }
+
+#divider {
+    width: 90%;
+    border: 0.5px solid #29292d;
+    margin-top: 20px;
+}
+
+#activeUsersTitle {
+    margin-top: 30px;
+    color: #dcddde;
+    font-size: 1.2rem;
+    align-self: flex-start;
+    margin-left: 5%;
+}
+
+#noActiveUsersMsg {
+    margin-top: 10px;
+    color: #777;
+    font-size: 1rem;
+    align-self: flex-start;
+    margin-left: 5%;
+    display: none;
+}
+
+#activeUsers {
+    flex: 1;
+    overflow-y: auto;
+    width: 94%;
+}
+
+.activeUser {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 6px;
+    padding: 10px;
+    border-radius: 8px;
+    color: #afafaf;
+    font-size: 1.3rem;
+}
+
+
 
 
 
