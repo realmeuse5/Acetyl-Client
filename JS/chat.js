@@ -193,6 +193,7 @@ async function switchChat(chatId) {
         return;
     }
     
+    updatePlaceholder(chatId === "public" ? "Public" : chatId);
     currentChat = chatId;
     setupPresence(chatId);
 
@@ -229,6 +230,11 @@ function highlightActiveChat(chatId) {
     }
 }
 
+function updatePlaceholder(chatName) {
+    const input = document.getElementById("messageInput");
+    input.placeholder = `Message @${chatName}`;
+}
+
 
 // CREATE/JOIN CHATS
 function createChat() {
@@ -239,6 +245,7 @@ function createChat() {
     const code = Math.random().toString(36).substring(2, 8);
 
     set(ref(db, `chats/${code}`), { createdAt: Date.now() });
+    set(ref(db, `chatMembers/${code}/${userId}`), true);
 
     addChatToSidebar(code);
     switchChat(code);
@@ -263,6 +270,11 @@ async function joinChat() {
         return;
     }
 
+    if (code === "public") {
+        switchChat("public");
+        return;
+    }
+
     const chatRef = ref(db, `chats/${code}`);
     const snapshot = await get(chatRef);
 
@@ -271,6 +283,7 @@ async function joinChat() {
         return;
     }
 
+    set(ref(db, `chatMembers/${code}/${userId}`), true);
     addChatToSidebar(code);
     switchChat(code);
 }
@@ -309,7 +322,7 @@ function addChatToSidebar(code) {
     updateNoServersMessage();
 }
 
-function leaveServer(code) {
+async function leaveServer(code) {
     if (!confirm("Are you sure you want to leave this server?")) return;
     if (code === "public") {
         alert("You cannot leave the public chat.");
@@ -325,9 +338,19 @@ function leaveServer(code) {
     if (row) row.remove();
 
     remove(ref(db, `chats/${code}/activeUsers/${userId}`));
+    remove(ref(db, `chatMembers/${code}/${userId}`));
 
     switchChat("public");
     updateNoServersMessage();
+
+    // If chat is empty, delete
+    const membersRef = ref(db, `chatMembers/${code}`);
+    const snapshot = await get(membersRef);
+
+    if (!snapshot.exists()) {
+    remove(ref(db, `chats/${code}`));
+        remove(ref(db, `chatMembers/${code}`));
+    }
 }
 
 function updateNoServersMessage() {
