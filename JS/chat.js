@@ -54,13 +54,10 @@ window.onload = () => {
 
 
     loadSavedUser();
-
+    cleanupGhostUsers();
     loadSavedChats();
-
     validateSavedChats();
-
     attachUIListeners();
-
     switchChat("public");
 };
 
@@ -72,6 +69,7 @@ function loadSavedUser() {
         username = savedName;
         usernameEl.textContent = username;
     }
+    set(ref(db, `usernames/${userId}`), username);
 
     if (localStorage.getItem("isAdmin") === "true") {
         isAdmin = true;
@@ -150,6 +148,25 @@ function changeUsername() {
             lastSeen: Date.now()
         });
     });
+}
+
+async function cleanupGhostUsers() {
+    const membersSnap = await get(ref(db, "chatMembers"));
+    const usernamesSnap = await get(ref(db, "usernames"));
+
+    if (!membersSnap.exists()) return;
+
+    const members = membersSnap.val();
+    const usernames = usernamesSnap.exists() ? usernamesSnap.val() : {};
+
+    for (const chatId in members) {
+        for (const userId in members[chatId]) {
+            if (!usernames[userId]) {
+                console.log("Removing ghost user:", userId);
+                remove(ref(db, `chatMembers/${chatId}/${userId}`));
+            }
+        }
+    }
 }
 
 
