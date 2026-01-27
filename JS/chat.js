@@ -77,6 +77,10 @@ function loadSavedUser() {
         isAdmin = true;
         activateAdminUI();
     }
+
+    if (localStorage.getItem("isAdmin") === "true") {
+        document.getElementById("adminPanelBtn").style.display = "block";
+    }
 }
 
 function loadSavedChats() {
@@ -99,6 +103,7 @@ async function validateSavedChats() {
             validChats.push(code);
         } else {
             console.log(`Removing deleted server: ${code}`);
+            remove(ref(db, `chatMembers/${code}/${userId}`));
         }
     }
 
@@ -137,6 +142,7 @@ function changeUsername() {
     username = cleaned;
     usernameEl.textContent = username;
     localStorage.setItem("username", username);
+    set(ref(db, `usernames/${userId}`), username);
     myChats.forEach(code => {
         const userRef = ref(db, `chats/${code}/activeUsers/${userId}`);
         set(userRef, {
@@ -160,6 +166,7 @@ function toggleAdmin() {
             isAdmin = true;
             localStorage.setItem("isAdmin", "true");
             activateAdminUI();
+            document.getElementById("adminPanelBtn").style.display = "block";
         } else {
             alert("Invalid credentials.");
         }
@@ -167,12 +174,14 @@ function toggleAdmin() {
         isAdmin = false;
         localStorage.removeItem("isAdmin");
         deactivateAdminUI();
+        document.getElementById("adminPanelBtn").style.display = "none";
     }
 }
 
 function activateAdminUI() {
     adminBtn.textContent = "Logout";
     usernameEl.innerHTML = `<span class="admin-badge">[ADMIN]</span><span class="admin-username">${username}</span>`;
+    document.getElementById("adminPanelBtn").style.display = "block";
 }
 
 function deactivateAdminUI() {
@@ -231,7 +240,6 @@ function highlightActiveChat(chatId) {
 }
 
 function updatePlaceholder(chatName) {
-    const input = document.getElementById("messageInput");
     input.placeholder = `Message @${chatName}`;
 }
 
@@ -383,7 +391,7 @@ async function enforceMessageLimit() {
     if (!snapshot.exists()) return;
 
     const messages = snapshot.val();
-    const keys = Object.keys(messages);
+    const keys = Object.keys(messages).sort();
 
     if (keys.length > 50) {
         const excess = keys.length - 50;
@@ -510,3 +518,144 @@ function isNearBottom() {
     const distance = messagesDiv.scrollHeight - messagesDiv.scrollTop - messagesDiv.clientHeight;
     return distance < threshold;
 }
+
+// ADMIN PANEL
+// Open
+document.getElementById("adminPanelBtn").addEventListener("click", () => {
+    document.getElementById("adminPanel").classList.remove("hidden");
+    wireAdminButtons();
+});
+
+// Close
+document.getElementById("adminClose").addEventListener("click", () => {
+    document.getElementById("adminPanel").classList.add("hidden");
+});
+
+const adminPanelBtn = document.getElementById("adminPanelBtn");
+
+if (localStorage.getItem("isAdmin") === "true") {
+    adminPanelBtn.style.display = "block";
+}
+
+function restoreAdminPanel() {
+    const content = document.querySelector(".admin-content");
+
+    content.innerHTML = `
+        <h3>Chat Tools</h3>
+        <button id="clearMessagesBtn">Clear Messages in This Chat</button>
+        <button id="deleteChatBtn">Delete This Chat</button>
+
+        <h3>Global Tools</h3>
+        <button id="deletePrivateChatsBtn">Delete All Private Chats</button>
+        <button id="deleteEmptyChatsBtn">Delete Empty Chats</button>
+
+        <h3>User Tools</h3>
+        <button id="resetActiveUsersBtn">Reset Active Users</button>
+        <button id="showAllUsersBtn">Show All Users</button>
+    `;
+
+    wireAdminButtons();
+}
+
+async function getAllUsers() {
+    const membersRef = ref(db, "chatMembers");
+    const snapshot = await get(membersRef);
+
+    if (!snapshot.exists()) return [];
+
+    const data = snapshot.val();
+    const users = new Set();
+
+    for (const chatId in data) {
+        for (const userId in data[chatId]) {
+            users.add(userId);
+        }
+    }
+
+    return Array.from(users);
+}
+
+async function getUsernames() {
+    const snap = await get(ref(db, "usernames"));
+    return snap.exists() ? snap.val() : {};
+}
+
+function countChatsForUser(userId, chatMembersData) {
+    let count = 0;
+    for (const chatId in chatMembersData) {
+        if (chatMembersData[chatId][userId]) count++;
+    }
+    return count;
+}
+
+async function getActiveUsers() {
+    const chatsSnap = await get(ref(db, "chats"));
+    if (!chatsSnap.exists()) return {};
+
+    const data = chatsSnap.val();
+    const active = {};
+
+    for (const chatId in data) {
+        if (data[chatId].activeUsers) {
+            for (const userId in data[chatId].activeUsers) {
+                active[userId] = true;
+            }
+        }
+    }
+
+    return active;
+}
+
+function wireAdminButtons() {
+    document.getElementById("showAllUsersBtn").onclick = showAllUsers;
+    document.getElementById("clearMessagesBtn").onclick = () => clearMessages(currentChat);
+    document.getElementById("deleteChatBtn").onclick = () => deleteChat(currentChat);
+    document.getElementById("deletePrivateChatsBtn").onclick = deleteAllPrivateChats;
+    document.getElementById("deleteEmptyChatsBtn").onclick = deleteEmptyChats;
+    document.getElementById("resetActiveUsersBtn").onclick = resetActiveUsers;
+}
+
+// Show all users
+async function showAllUsers() {
+    const users = await getAllUsers();
+    const usernames = await getUsernames();
+    const activeUsers = await getActiveUsers();
+
+    const membersSnap = await get(ref(db, "chatMembers"));
+    const membersData = membersSnap.exists() ? membersSnap.val() : {};
+
+    const content = document.querySelector(".admin-content");
+
+    let html = `<h3>All Users</h3>`;
+    users.sort();
+
+    if (users.length === 0) {
+        html += `<p>No users found.</p>`;
+    } else {
+        users.forEach(userId => {
+            const name = usernames[userId] || "Anonymous";
+            const chatCount = countChatsForUser(userId, membersData);
+            const isActive = activeUsers[userId] ? "Active" : "Offline";
+
+            html += `
+                <div class="userRow">
+                    <strong>${name}</strong> <span style="opacity:0.7">(${userId})</span><br>
+                    Chats: ${chatCount}<br>
+                    Status: ${isActive}
+                </div>
+            `;
+        });
+    }
+
+    html += `<br><button id="backToAdmin">Back</button>`;
+    content.innerHTML = html;
+
+    document.getElementById("backToAdmin").onclick = restoreAdminPanel;
+}
+
+
+
+
+
+
+

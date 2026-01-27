@@ -22,6 +22,7 @@
                 <span id="gear"><i class="fa-solid fa-gear"></i></span>
             </div>
             <button id="adminLogin">Admin Login</button>
+            <button id="adminPanelBtn">Admin Panel</button>
             <button id="publicChatBtn" class="publicButton" data-chat="public">Public Server</button>
             <button id="createChatBtn" class="actionButton"><i class="fa-sharp fa-solid fa-plus" style="margin-right: 20px"></i>Create Server</button>
             <button id="joinChatBtn" class="actionButton"><i class="fa-solid fa-arrow-right-to-bracket" style="margin-right: 20px"></i>Join Server</button>
@@ -44,6 +45,31 @@
 
         </div>
 
+    </div>
+
+    <div id="adminPanel" class="admin-modal hidden">
+        <div id="admin-window">
+
+            <div class="admin-header">
+                <span class="admin-title">Admin Panel</span>
+                <span id="adminClose">✖</span>
+            </div>
+            
+            <div class="admin-content">
+                <h3>Chat Tools</h3>
+                <button id="clearMessagesBtn">Clear Messages in This Chat</button>
+                <button id="deleteChatBtn">Delete This Chat</button>
+
+                <h3>Global Tools</h3>
+                <button id="deletePrivateChatsBtn">Delete All Private Chats</button>
+                <button id="deleteEmptyChatsBtn">Delete Empty Chats</button>
+
+                <h3>User Tools</h3>
+                <button id="resetActiveUsersBtn">Reset Active Users</button>
+                <button id="showAllUsersBtn">Show All Users</button>
+            </div>
+
+        </div>
     </div>
 
     <script type="module" src="JS/firebase-init.js"></script>

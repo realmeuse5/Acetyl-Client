@@ -366,10 +366,85 @@ input:focus {
     font-size: 1.3rem;
 }
 
+#adminPanelBtn {
+    background-color: #121214;
+    border: none;
+    color: #dcddde;
+    font-size: 1.5rem;
+    font-weight: 500;
+    margin-top: 20px;
+    width: 94%;
+    padding: 10px;
+    border-radius: 8px;
+}
 
+#adminPanelBtn:hover {
+    background-color: #212124;
+    cursor: pointer;
+}
 
+.admin-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 999;
+}
 
+.admin-modal.hidden {
+    display: none;
+}
 
+#admin-window {
+    width: 55vw;
+    height: 60vh;
+    background: #202024;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+    display: flex;
+    flex-direction: column;
+}
 
+.admin-header {
+    background: #1a1a1e;
+    padding: 15px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
 
+.admin-title {
+    font-size: 1.5rem;
+    font-weight: 500;
+    color: white;
+}
 
+#adminClose {
+    font-size: 1.5rem;
+    color: #ccc;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+#adminClose:hover {
+    color: white;
+}
+
+.admin-content {
+    padding: 16px;
+    overflow-y: auto;
+    color: #dcddde;
+}
+
+.admin-content h3 {
+    margin-top: 0;
+    font-size: 1.3rem;
+    font-weight: 500;
+}
+
+#adminPanelBtn {
+    display: none;
+}
