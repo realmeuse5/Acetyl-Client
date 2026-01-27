@@ -54,7 +54,7 @@ window.onload = () => {
 
 
     loadSavedUser();
-    cleanupGhostUsers();
+    cleanupOldUsers();
     loadSavedChats();
     validateSavedChats();
     attachUIListeners();
@@ -150,20 +150,39 @@ function changeUsername() {
     });
 }
 
-async function cleanupGhostUsers() {
-    const membersSnap = await get(ref(db, "chatMembers"));
+async function cleanupOldUsers() {
     const usernamesSnap = await get(ref(db, "usernames"));
+    if (!usernamesSnap.exists()) return;
 
-    if (!membersSnap.exists()) return;
+    const usernames = usernamesSnap.val();
 
-    const members = membersSnap.val();
-    const usernames = usernamesSnap.exists() ? usernamesSnap.val() : {};
+    for (const uid in usernames) {
+        if (uid !== userId) {
+            console.log("Removing old user:", uid);
 
-    for (const chatId in members) {
-        for (const userId in members[chatId]) {
-            if (!usernames[userId]) {
-                console.log("Removing ghost user:", userId);
-                remove(ref(db, `chatMembers/${chatId}/${userId}`));
+            // Remove username
+            remove(ref(db, `usernames/${uid}`));
+
+            // Remove from all chatMembers
+            const membersSnap = await get(ref(db, "chatMembers"));
+            if (membersSnap.exists()) {
+                const members = membersSnap.val();
+                for (const chatId in members) {
+                    if (members[chatId][uid]) {
+                        remove(ref(db, `chatMembers/${chatId}/${uid}`));
+                    }
+                }
+            }
+
+            // Remove from activeUsers
+            const chatsSnap = await get(ref(db, "chats"));
+            if (chatsSnap.exists()) {
+                const chats = chatsSnap.val();
+                for (const chatId in chats) {
+                    if (chats[chatId].activeUsers && chats[chatId].activeUsers[uid]) {
+                        remove(ref(db, `chats/${chatId}/activeUsers/${uid}`));
+                    }
+                }
             }
         }
     }
