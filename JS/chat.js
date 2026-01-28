@@ -313,7 +313,7 @@ function addChatToSidebar(code) {
 
     // Create the leave (X) button
     const leave = document.createElement("span");
-    leave.textContent = "✖";
+    leave.textContent = "";
     leave.classList.add("leaveChat");
 
     leave.addEventListener("click", (e) => {
@@ -525,7 +525,7 @@ document.getElementById("adminPanelBtn").addEventListener("click", () => {
 });
 
 // Close
-document.getElementById("adminClose").addEventListener("click", () => {
+document.getElementsByClassName("leaveChat")[0].addEventListener("click", () => {
     document.getElementById("adminPanel").classList.add("hidden");
 });
 
