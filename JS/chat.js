@@ -31,7 +31,7 @@ let unsubscribe = null;
 let myChats = [];
 
 // Admin credentials
-const ADMIN_KEY = "Ky3{*OxQ3#S*tFIw53$8ZJjjT";
+const ADMIN_KEY = "Ky3xQ3#Ftw53$";
 const ADMIN_PIN = "4123";
 
 // User ID
