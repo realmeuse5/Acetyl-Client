@@ -54,7 +54,6 @@ window.onload = () => {
 
 
     loadSavedUser();
-    cleanupOldUsers();
     loadSavedChats();
     validateSavedChats();
     attachUIListeners();
@@ -69,6 +68,7 @@ function loadSavedUser() {
         username = savedName;
         usernameEl.textContent = username;
     }
+    
     set(ref(db, `usernames/${userId}`), username);
 
     if (localStorage.getItem("isAdmin") === "true") {
@@ -148,44 +148,6 @@ function changeUsername() {
             lastSeen: Date.now()
         });
     });
-}
-
-async function cleanupOldUsers() {
-    const usernamesSnap = await get(ref(db, "usernames"));
-    if (!usernamesSnap.exists()) return;
-
-    const usernames = usernamesSnap.val();
-
-    for (const uid in usernames) {
-        if (uid !== userId) {
-            console.log("Removing old user:", uid);
-
-            // Remove username
-            remove(ref(db, `usernames/${uid}`));
-
-            // Remove from all chatMembers
-            const membersSnap = await get(ref(db, "chatMembers"));
-            if (membersSnap.exists()) {
-                const members = membersSnap.val();
-                for (const chatId in members) {
-                    if (members[chatId][uid]) {
-                        remove(ref(db, `chatMembers/${chatId}/${uid}`));
-                    }
-                }
-            }
-
-            // Remove from activeUsers
-            const chatsSnap = await get(ref(db, "chats"));
-            if (chatsSnap.exists()) {
-                const chats = chatsSnap.val();
-                for (const chatId in chats) {
-                    if (chats[chatId].activeUsers && chats[chatId].activeUsers[uid]) {
-                        remove(ref(db, `chats/${chatId}/activeUsers/${uid}`));
-                    }
-                }
-            }
-        }
-    }
 }
 
 
@@ -573,77 +535,7 @@ if (localStorage.getItem("isAdmin") === "true") {
     adminPanelBtn.style.display = "block";
 }
 
-function restoreAdminPanel() {
-    const content = document.querySelector(".admin-content");
-
-    content.innerHTML = `
-        <h3>Chat Tools</h3>
-        <button id="clearMessagesBtn">Clear Messages in This Chat</button>
-        <button id="deleteChatBtn">Delete This Chat</button>
-
-        <h3>Global Tools</h3>
-        <button id="deletePrivateChatsBtn">Delete All Private Chats</button>
-        <button id="deleteEmptyChatsBtn">Delete Empty Chats</button>
-
-        <h3>User Tools</h3>
-        <button id="resetActiveUsersBtn">Reset Active Users</button>
-        <button id="showAllUsersBtn">Show All Users</button>
-    `;
-
-    wireAdminButtons();
-}
-
-async function getAllUsers() {
-    const membersRef = ref(db, "chatMembers");
-    const snapshot = await get(membersRef);
-
-    if (!snapshot.exists()) return [];
-
-    const data = snapshot.val();
-    const users = new Set();
-
-    for (const chatId in data) {
-        for (const userId in data[chatId]) {
-            users.add(userId);
-        }
-    }
-
-    return Array.from(users);
-}
-
-async function getUsernames() {
-    const snap = await get(ref(db, "usernames"));
-    return snap.exists() ? snap.val() : {};
-}
-
-function countChatsForUser(userId, chatMembersData) {
-    let count = 0;
-    for (const chatId in chatMembersData) {
-        if (chatMembersData[chatId][userId]) count++;
-    }
-    return count;
-}
-
-async function getActiveUsers() {
-    const chatsSnap = await get(ref(db, "chats"));
-    if (!chatsSnap.exists()) return {};
-
-    const data = chatsSnap.val();
-    const active = {};
-
-    for (const chatId in data) {
-        if (data[chatId].activeUsers) {
-            for (const userId in data[chatId].activeUsers) {
-                active[userId] = true;
-            }
-        }
-    }
-
-    return active;
-}
-
 function wireAdminButtons() {
-    document.getElementById("showAllUsersBtn").onclick = showAllUsers;
     document.getElementById("clearMessagesBtn").onclick = () => clearMessages(currentChat);
     document.getElementById("deleteChatBtn").onclick = () => deleteChat(currentChat);
     document.getElementById("deletePrivateChatsBtn").onclick = deleteAllPrivateChats;
@@ -651,43 +543,6 @@ function wireAdminButtons() {
     document.getElementById("resetActiveUsersBtn").onclick = resetActiveUsers;
 }
 
-// Show all users
-async function showAllUsers() {
-    const users = await getAllUsers();
-    const usernames = await getUsernames();
-    const activeUsers = await getActiveUsers();
-
-    const membersSnap = await get(ref(db, "chatMembers"));
-    const membersData = membersSnap.exists() ? membersSnap.val() : {};
-
-    const content = document.querySelector(".admin-content");
-
-    let html = `<h3>All Users</h3>`;
-    users.sort();
-
-    if (users.length === 0) {
-        html += `<p>No users found.</p>`;
-    } else {
-        users.forEach(userId => {
-            const name = usernames[userId] || "Anonymous";
-            const chatCount = countChatsForUser(userId, membersData);
-            const isActive = activeUsers[userId] ? "Active" : "Offline";
-
-            html += `
-                <div class="userRow">
-                    <strong>${name}</strong> <span style="opacity:0.7">(${userId})</span><br>
-                    Chats: ${chatCount}<br>
-                    Status: ${isActive}
-                </div>
-            `;
-        });
-    }
-
-    html += `<br><button id="backToAdmin">Back</button>`;
-    content.innerHTML = html;
-
-    document.getElementById("backToAdmin").onclick = restoreAdminPanel;
-}
 
 
 
