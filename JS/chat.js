@@ -63,6 +63,10 @@ window.onload = () => {
     if (Notification.permission !== "granted") {
         Notification.requestPermission();
     }
+
+    if ("serviceWorker" in navigator) {
+        navigator.serviceWorker.register("service-worker.js");
+    }
 };
 
 
