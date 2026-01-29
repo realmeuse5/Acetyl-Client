@@ -58,6 +58,7 @@ window.onload = () => {
     validateSavedChats();
     attachUIListeners();
     switchChat("public");
+    setupNotificationListener("public");
 
     if (Notification.permission !== "granted") {
         Notification.requestPermission();
@@ -383,12 +384,15 @@ function sendMessage() {
     const text = input.value.trim();
     if (!text || text.length > 500) return;
 
+    const messagesRef = ref(db, `chats/${currentChat}/messages`);
+
     push(messagesRef, {
         text,
         username,
         timestamp: Date.now(),
         isAdmin
     });
+
 
     enforceMessageLimit();
     input.value = "";
@@ -532,9 +536,6 @@ function isTabActive() {
 }
 
 function maybeNotify(msg, chatId) {
-    // Don't notify for the chat you're currently viewing
-    if (chatId === currentChat) return;
-
     // Don't notify if tab is active
     if (isTabActive()) return;
 
@@ -547,10 +548,8 @@ function maybeNotify(msg, chatId) {
     const title = `${msg.username} sent a message`;
     const body = `on server ${chatId}`;
 
-    new Notification(title, {
-        body,
-        icon: "/icon.png"
-    });
+    new Notification(title, { body });
+    console.log("maybeNotify triggered:", msg, chatId);
 }
 
 const notificationListeners = new Set();
