@@ -552,7 +552,7 @@ function maybeNotify(msg, chatId) {
     const title = `${msg.username} sent a message`;
     const body = `on server ${chatId}`;
 
-    new Notification(title, { body });
+    new Notification(title, {body, requireInteraction: true});
     console.log("maybeNotify triggered:", msg, chatId);
 }
 
