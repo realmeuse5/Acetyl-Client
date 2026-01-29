@@ -58,6 +58,10 @@ window.onload = () => {
     validateSavedChats();
     attachUIListeners();
     switchChat("public");
+
+    if (Notification.permission !== "granted") {
+        Notification.requestPermission();
+    }
 };
 
 
@@ -213,7 +217,9 @@ async function switchChat(chatId) {
     messagesDiv.innerHTML = "";
 
     unsubscribe = onChildAdded(messagesRef, (snapshot) => {
-        displayMessage(snapshot.val());
+        const msg = snapshot.val();
+        displayMessage(msg);
+        maybeNotify(msg, currentChat);
     });
 }
 
@@ -256,6 +262,8 @@ function createChat() {
     addChatToSidebar(code);
     switchChat(code);
 
+    setupNotificationListener(code);
+
     // Auto message
     push(ref(db, `chats/${code}/messages`), {
     text: `Server created. Your server code is: ${code}`,
@@ -292,6 +300,8 @@ async function joinChat() {
     set(ref(db, `chatMembers/${code}/${userId}`), true);
     addChatToSidebar(code);
     switchChat(code);
+
+    setupNotificationListener(code);
 }
 
 function addChatToSidebar(code) {
@@ -517,6 +527,47 @@ function isNearBottom() {
     return distance < threshold;
 }
 
+function isTabActive() {
+    return document.visibilityState === "visible";
+}
+
+function maybeNotify(msg, chatId) {
+    // Don't notify for the chat you're currently viewing
+    if (chatId === currentChat) return;
+
+    // Don't notify if tab is active
+    if (isTabActive()) return;
+
+    // Don't notify for your own messages
+    if (msg.username === username) return;
+
+    // Don't notify for system messages
+    if (msg.isSystem) return;
+
+    const title = `${msg.username} sent a message`;
+    const body = `on server ${chatId}`;
+
+    new Notification(title, {
+        body,
+        icon: "/icon.png"
+    });
+}
+
+const notificationListeners = new Set();
+
+function setupNotificationListener(chatId) {
+    if (notificationListeners.has(chatId)) return;
+    notificationListeners.add(chatId);
+
+    const refMessages = ref(db, `chats/${chatId}/messages`);
+
+    onChildAdded(refMessages, (snapshot) => {
+        const msg = snapshot.val();
+        maybeNotify(msg, chatId);
+    });
+}
+
+
 // ADMIN PANEL
 // Open
 document.getElementById("adminPanelBtn").addEventListener("click", () => {
@@ -542,6 +593,7 @@ function wireAdminButtons() {
     document.getElementById("deleteEmptyChatsBtn").onclick = deleteEmptyChats;
     document.getElementById("resetActiveUsersBtn").onclick = resetActiveUsers;
 }
+
 
 
 
