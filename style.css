@@ -108,7 +108,7 @@ input:focus {
     flex: 1;
     margin-left: 15px;
     color: #dcddde;
-    font-size: 1.5rem;
+    font-size: 1.3rem;
     display: inline-block;  
     max-width: 70%;
     white-space: nowrap;
@@ -132,7 +132,7 @@ input:focus {
     margin-top: 20px;
     width: 94%;
     padding: 10px;
-    font-size: 1.5rem;
+    font-size: 1.3rem;
     border: none;
     border-radius: 8px;
     background: linear-gradient(90deg, #4E00CA 0%, #FF00EA 50%, #4E00CA 100%);
@@ -222,7 +222,7 @@ input:focus {
     background-color: #121214;
     border: none;
     color: #dcddde;
-    font-size: 1.5rem;
+    font-size: 1.3rem;
     font-weight: 500;
     margin-top: 20px;
     width: 94%;
@@ -244,7 +244,7 @@ input:focus {
     background-color: #121214;
     border: none;
     color: #dcddde;
-    font-size: 1.5rem;
+    font-size: 1.3rem;
     font-weight: 500;
     margin-top: 20px;
     width: 94%;
@@ -305,7 +305,7 @@ input:focus {
     background-color: transparent;
     border: none;
     color: #dcddde;
-    font-size: 1.3rem;
+    font-size: 1.2rem;
 }
 
 .chatButton:hover {
@@ -393,7 +393,7 @@ input:focus {
     background-color: #121214;
     border: none;
     color: #dcddde;
-    font-size: 1.5rem;
+    font-size: 1.3rem;
     font-weight: 500;
     margin-top: 20px;
     width: 94%;
