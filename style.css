@@ -33,6 +33,24 @@ body {
     background-clip: transparent;
 }
 
+#firebase {
+    display: flex;
+    flex-direction: column;
+    margin-left: 50px;
+    gap: 5px;
+}
+
+#firebase p {
+    margin: 0;
+    font-size: 0.5vw;
+    color: #888;
+}
+
+#firebase img {
+    height: 2vh;
+    width: auto;
+}
+
 #web-container {
     display: flex;
     flex-direction: row;
@@ -129,7 +147,7 @@ input:focus {
 }
 
 #adminLogin {
-    margin-top: 20px;
+    margin-top: 15px;
     width: 94%;
     padding: 10px;
     font-size: 1.3rem;
@@ -224,7 +242,7 @@ input:focus {
     color: #dcddde;
     font-size: 1.3rem;
     font-weight: 500;
-    margin-top: 20px;
+    margin-top: 15px;
     width: 94%;
     padding: 10px;
     border-radius: 8px;
@@ -246,7 +264,7 @@ input:focus {
     color: #dcddde;
     font-size: 1.3rem;
     font-weight: 500;
-    margin-top: 20px;
+    margin-top: 15px;
     width: 94%;
     padding: 10px;
     border-radius: 8px;
@@ -352,7 +370,7 @@ input:focus {
 #divider {
     width: 90%;
     border: 0.5px solid #29292d;
-    margin-top: 20px;
+    margin-top: 15px;
 }
 
 #activeUsersTitle {
@@ -386,7 +404,7 @@ input:focus {
     padding: 10px;
     border-radius: 8px;
     color: #afafaf;
-    font-size: 1.3rem;
+    font-size: 1.1rem;
 }
 
 #adminPanelBtn {
@@ -395,7 +413,7 @@ input:focus {
     color: #dcddde;
     font-size: 1.3rem;
     font-weight: 500;
-    margin-top: 20px;
+    margin-top: 15px;
     width: 94%;
     padding: 10px;
     border-radius: 8px;

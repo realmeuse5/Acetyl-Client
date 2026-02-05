@@ -28,7 +28,7 @@ let currentChat = "public";
 let messagesRef = null;
 let unsubscribe = null;
 
-let myChats = [];
+let myChats = JSON.parse(localStorage.getItem("myChats") || "[]");
 
 // Admin credentials
 const ADMIN_KEY = "Ky3xQ3#Ftw53$";
@@ -63,10 +63,6 @@ window.onload = () => {
     if (Notification.permission !== "granted") {
         Notification.requestPermission();
     }
-
-    if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("service-worker.js");
-    }
 };
 
 
@@ -90,24 +86,44 @@ function loadSavedUser() {
     }
 }
 
-function loadSavedChats() {
-    const saved = localStorage.getItem("myChats");
-    if (saved) {
-        myChats = JSON.parse(saved);
-        myChats.forEach(code => addChatToSidebar(code));
+async function loadSavedChats() {
+    const upgraded = [];
+
+    for (const chat of myChats) {
+        // Old format: "abc123"
+        const code = typeof chat === "string" ? chat : chat.code;
+
+        const snap = await get(ref(db, `chats/${code}/name`));
+        let name = snap.exists() ? snap.val() : null;
+
+        if (!name) {
+            name = `Chat ${code}`;
+            await set(ref(db, `chats/${code}/name`), name);
+        }
+
+        // Upgrade localStorage entry
+        upgraded.push({ code, name });
+
+        addChatToSidebar(code, name);
     }
-    updateNoServersMessage();
+
+    myChats = upgraded;
+    localStorage.setItem("myChats", JSON.stringify(myChats));
 }
 
 async function validateSavedChats() {
     const validChats = [];
 
-    for (const code of myChats) {
+    for (const chat of myChats) {
+        const code = chat.code;  
+        const name = chat.name;
+
         const chatRef = ref(db, `chats/${code}`);
         const snapshot = await get(chatRef);
 
         if (snapshot.exists()) {
-            validChats.push(code);
+            // Keep the chat with both code + name
+            validChats.push({ code, name });
         } else {
             console.log(`Removing deleted server: ${code}`);
             remove(ref(db, `chatMembers/${code}/${userId}`));
@@ -118,7 +134,12 @@ async function validateSavedChats() {
     localStorage.setItem("myChats", JSON.stringify(myChats));
 
     myChatsContainer.innerHTML = "";
-    myChats.forEach(code => addChatToSidebar(code));
+
+    // Rebuild sidebar with names
+    myChats.forEach(chat => {
+        addChatToSidebar(chat.code, chat.name);
+    });
+
     updateNoServersMessage();
 }
 
@@ -150,13 +171,13 @@ function changeUsername() {
     usernameEl.textContent = username;
     localStorage.setItem("username", username);
     set(ref(db, `usernames/${userId}`), username);
-    myChats.forEach(code => {
-        const userRef = ref(db, `chats/${code}/activeUsers/${userId}`);
-        set(userRef, {
-            username: username,
-            lastSeen: Date.now()
-        });
+    myChats.forEach(chat => {
+    const userRef = ref(db, `chats/${chat.code}/activeUsers/${userId}`);
+    set(userRef, {
+        username: username,
+        lastSeen: Date.now()
     });
+});
 }
 
 
@@ -208,12 +229,14 @@ async function switchChat(chatId) {
         switchChat("public");
         return;
     }
-    
-    updatePlaceholder(chatId === "public" ? "Public" : chatId);
+
+    const data = snapshot.val();
+    const chatName = data.name || chatId;
+
+    updatePlaceholder(chatName);
     currentChat = chatId;
     setupPresence(chatId);
 
-    // Highlight active chat
     highlightActiveChat(chatId);
 
     if (unsubscribe) unsubscribe();
@@ -259,33 +282,36 @@ function createChat() {
         alert("Server limit reached");
         return;
     }
+
+    const name = prompt("Enter a name for your chat:");
+    if (!name) return;
+
     const code = Math.random().toString(36).substring(2, 8);
 
-    set(ref(db, `chats/${code}`), { createdAt: Date.now() });
-    set(ref(db, `chatMembers/${code}/${userId}`), true);
+    set(ref(db, `chats/${code}`), {
+        name,
+        createdAt: Date.now()
+    });
 
-    addChatToSidebar(code);
+    addChatToSidebar(code, name);
     switchChat(code);
-
-    setupNotificationListener(code);
 
     // Auto message
     push(ref(db, `chats/${code}/messages`), {
-    text: `Server created. Your server code is: ${code}`,
-    username: "Server Bot",
-    timestamp: Date.now(),
-    isAdmin: false,
-    isSystem: true
-});
-
+        text: `Server created. Your server code is: ${code}`,
+        username: "Server Bot",
+        timestamp: Date.now(),
+        isAdmin: false,
+        isSystem: true
+    });
 }
 
 async function joinChat() {
     const code = prompt("Enter server code:");
     if (!code) return;
 
-    // NEW: prevent joining twice
-    if (myChats.includes(code)) {
+    // Prevent joining twice
+    if (myChats.some(c => c.code === code)) {
         return;
     }
 
@@ -302,16 +328,28 @@ async function joinChat() {
         return;
     }
 
+    const data = snapshot.val();
+
+    let name = data.name;
+    if (!name) {
+        name = `Chat ${code}`; // or any fallback you like
+        await set(ref(db, `chats/${code}/name`), name);
+    }
+
+    // Add user to chatMembers
     set(ref(db, `chatMembers/${code}/${userId}`), true);
-    addChatToSidebar(code);
+
+    // Add to sidebar using the NAME
+    addChatToSidebar(code, name);
+
     switchChat(code);
 
     setupNotificationListener(code);
 }
 
-function addChatToSidebar(code) {
-    if (!myChats.includes(code)) {
-        myChats.push(code);
+function addChatToSidebar(code, name) {
+    if (!myChats.some(c => c.code === code)) {
+        myChats.push({ code, name });
         localStorage.setItem("myChats", JSON.stringify(myChats));
     }
 
@@ -319,18 +357,15 @@ function addChatToSidebar(code) {
     row.classList.add("chatRow");
     row.dataset.chat = code;
 
-    // Create the chat button
     const btn = document.createElement("button");
-    btn.textContent = code;
+    btn.textContent = name; // show the chat NAME
     btn.classList.add("chatButton");
     btn.dataset.chat = code;
     btn.addEventListener("click", () => switchChat(code));
 
-    // Create the leave (X) button
     const leave = document.createElement("span");
     leave.textContent = "";
     leave.classList.add("leaveChat");
-
     leave.addEventListener("click", (e) => {
         e.stopPropagation();
         leaveServer(code);
@@ -338,8 +373,8 @@ function addChatToSidebar(code) {
 
     row.appendChild(btn);
     row.appendChild(leave);
-
     myChatsContainer.appendChild(row);
+
     updateNoServersMessage();
 }
 
@@ -350,12 +385,12 @@ async function leaveServer(code) {
         return;
     }
 
-    myChats = myChats.filter(c => c !== code);
+    myChats = myChats.filter(c => c.code !== code);
     localStorage.setItem("myChats", JSON.stringify(myChats));
 
     // Remove from sidebar
     const rows = [...myChatsContainer.children];
-    const row = rows.find(r => r.querySelector("button").textContent === code);
+    const row = rows.find(r => r.dataset.chat === code);
     if (row) row.remove();
 
     remove(ref(db, `chats/${code}/activeUsers/${userId}`));
@@ -388,7 +423,7 @@ function sendMessage() {
     const text = input.value.trim();
     if (!text || text.length > 500) return;
 
-    const messagesRef = ref(db, `chats/${currentChat}/messages`);
+    messagesRef = ref(db, `chats/${currentChat}/messages`);
 
     push(messagesRef, {
         text,
