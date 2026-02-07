@@ -1,5 +1,5 @@
 // IMPORTS
-import { db } from "./firebase-init.js";
+import { db, auth } from "./firebase-init.js";
 import { 
     ref, 
     push, 
@@ -13,7 +13,8 @@ import {
     onDisconnect
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
-// VARIABLES   
+
+// GLOBAL STATE
 let messagesDiv;
 let input;
 let usernameEl;
@@ -30,21 +31,12 @@ let unsubscribe = null;
 
 let myChats = JSON.parse(localStorage.getItem("myChats") || "[]");
 
-// Admin credentials
-const ADMIN_KEY = "Ky3xQ3#Ftw53$";
-const ADMIN_PIN = "4123";
-
-// User ID
-let userId = localStorage.getItem("userId");
-if (!userId) {
-    userId = "u_" + Math.random().toString(36).substring(2, 10);
-    localStorage.setItem("userId", userId);
-}
+// We always use auth.currentUser.uid once Auth is ready.
+let uid = null;
 
 
 // ONLOAD
 window.onload = () => {
-    // DOM elements
     messagesDiv = document.getElementById("messages");
     input = document.getElementById("messageInput");
     usernameEl = document.getElementById("username");
@@ -52,37 +44,104 @@ window.onload = () => {
     myChatsContainer = document.getElementById("myChats");
     msg = document.getElementById("noServersMsg");
 
-
-    loadSavedUser();
-    loadSavedChats();
-    validateSavedChats();
-    attachUIListeners();
-    switchChat("public");
-    setupNotificationListener("public");
-    checkAdminStatus();
-
-    if (Notification.permission !== "granted") {
-        Notification.requestPermission();
-    }
+    waitForAuthReady();
 };
+
+function waitForAuthReady() {
+    const unsub = auth.onAuthStateChanged(async (user) => {
+        if (!user) return; // firebase-init will sign in
+
+        uid = user.uid;
+        console.log("Auth ready, UID:", uid);
+
+        unsub();
+
+        await migrateOldIdentityIfNeeded(uid);
+
+        await loadSavedUser(uid);
+        await loadSavedChats();
+        await validateSavedChats();
+
+        attachUIListeners();
+        switchChat("public");
+        setupNotificationListener("public");
+        checkAdminStatus();
+
+        if (Notification.permission !== "granted") {
+            Notification.requestPermission();
+        }
+    });
+}
+
+// MIGRATION: from old localStorage userId → UID
+async function migrateOldIdentityIfNeeded(newUid) {
+    const oldId = localStorage.getItem("userId");
+    if (!oldId || oldId === newUid) return;
+
+    console.log("Found oldId, migrating:", oldId, "→", newUid);
+
+    // 1) Migrate username: usernames/<oldId> → users/<newUid>/username
+    const oldUsernameRef = ref(db, `usernames/${oldId}`);
+    const oldUsernameSnap = await get(oldUsernameRef);
+
+    if (oldUsernameSnap.exists()) {
+        const oldName = oldUsernameSnap.val();
+        await set(ref(db, `users/${newUid}/username`), oldName);
+        await remove(oldUsernameRef);
+        localStorage.setItem("username", oldName);
+        console.log("Migrated username:", oldName);
+    }
+
+    // 2) Migrate chat membership: chatMembers/<chat>/<oldId> → chatMembers/<chat>/<newUid>
+    const chatMembersRoot = ref(db, "chatMembers");
+    const chatMembersSnap = await get(chatMembersRoot);
+
+    if (chatMembersSnap.exists()) {
+        const allChats = chatMembersSnap.val();
+        for (const chatCode of Object.keys(allChats)) {
+            const members = allChats[chatCode];
+            if (members && members[oldId]) {
+                await set(ref(db, `chatMembers/${chatCode}/${newUid}`), true);
+                await remove(ref(db, `chatMembers/${chatCode}/${oldId}`));
+                console.log(`Migrated chat membership in ${chatCode}`);
+            }
+        }
+    }
+
+    // Remove old local ID
+    localStorage.removeItem("userId");
+    console.log("Migration complete for", oldId);
+}
 
 
 // LOAD USER + CHATS 
-function loadSavedUser() {
+async function loadSavedUser(currentUid) {
     const savedName = localStorage.getItem("username");
+
     if (savedName) {
         username = savedName;
         usernameEl.textContent = username;
+        await set(ref(db, `users/${currentUid}/username`), username);
+    } else {
+        // Try to load from DB if exists
+        const userRef = ref(db, `users/${currentUid}/username`);
+        const snap = await get(userRef);
+        if (snap.exists()) {
+            username = snap.val();
+            usernameEl.textContent = username;
+            localStorage.setItem("username", username);
+        } else {
+            username = "Anonymous";
+            usernameEl.textContent = username;
+            await set(userRef, username);
+        }
     }
-    
-    set(ref(db, `usernames/${userId}`), username);
 }
 
 async function loadSavedChats() {
     const upgraded = [];
 
     for (const chat of myChats) {
-        // Old format: "abc123"
         const code = typeof chat === "string" ? chat : chat.code;
 
         const snap = await get(ref(db, `chats/${code}/name`));
@@ -93,9 +152,7 @@ async function loadSavedChats() {
             await set(ref(db, `chats/${code}/name`), name);
         }
 
-        // Upgrade localStorage entry
         upgraded.push({ code, name });
-
         addChatToSidebar(code, name);
     }
 
@@ -114,11 +171,12 @@ async function validateSavedChats() {
         const snapshot = await get(chatRef);
 
         if (snapshot.exists()) {
-            // Keep the chat with both code + name
             validChats.push({ code, name });
         } else {
             console.log(`Removing deleted server: ${code}`);
-            remove(ref(db, `chatMembers/${code}/${userId}`));
+            if (uid) {
+                remove(ref(db, `chatMembers/${code}/${uid}`));
+            }
         }
     }
 
@@ -126,12 +184,7 @@ async function validateSavedChats() {
     localStorage.setItem("myChats", JSON.stringify(myChats));
 
     myChatsContainer.innerHTML = "";
-
-    // Rebuild sidebar with names
-    myChats.forEach(chat => {
-        addChatToSidebar(chat.code, chat.name);
-    });
-
+    myChats.forEach(chat => addChatToSidebar(chat.code, chat.name));
     updateNoServersMessage();
 }
 
@@ -143,16 +196,17 @@ function attachUIListeners() {
     document.getElementById("createChatBtn").addEventListener("click", createChat);
     document.getElementById("joinChatBtn").addEventListener("click", joinChat);
 
-    adminBtn.addEventListener("click", toggleAdmin);
+    adminBtn.addEventListener("click", () => {
+        alert("Admin login is now managed by UID.\nAsk the owner to add your UID in /admins.");
+    });
 
     input.addEventListener("keydown", (e) => {
         if (e.key === "Enter") sendMessage();
     });
 }
 
-
 // USERNAME MANAGEMENT
-function changeUsername() {
+async function changeUsername() {
     const name = prompt("Username:");
     if (!name) return;
 
@@ -162,44 +216,42 @@ function changeUsername() {
     username = cleaned;
     usernameEl.textContent = username;
     localStorage.setItem("username", username);
-    set(ref(db, `usernames/${userId}`), username);
+
+    if (!uid) return;
+
+    await set(ref(db, `users/${uid}/username`), username);
+
+    // Update presence username in all joined chats
     myChats.forEach(chat => {
-    const userRef = ref(db, `chats/${chat.code}/activeUsers/${userId}`);
-    set(userRef, {
-        username: username,
-        lastSeen: Date.now()
+        const userRef = ref(db, `chats/${chat.code}/activeUsers/${uid}`);
+        set(userRef, {
+            username: username,
+            lastSeen: Date.now()
+        });
     });
-});
 }
 
 
-// ADMIN LOGIN/LOGOUT
-function toggleAdmin() {
-    if (!isAdmin) {
-        const key = prompt("Admin Key:");
-        if (!key) return;
+// ADMIN STATUS
+async function checkAdminStatus() {
+    if (!uid) return;
 
-        const pin = prompt("Admin PIN:");
-        if (!pin) return;
+    const adminRef = ref(db, `admins/${uid}`);
+    const snap = await get(adminRef);
 
-        if (key === ADMIN_KEY && pin === ADMIN_PIN) {
-            isAdmin = true;
-            set(ref(db, `admins/${userId}`), true);
-            activateAdminUI();
-            document.getElementById("adminPanelBtn").style.display = "block";
-        } else {
-            alert("Invalid credentials.");
-        }
+    if (snap.exists()) {
+        isAdmin = true;
+        activateAdminUI();
+        document.getElementById("adminPanelBtn").style.display = "block";
     } else {
         isAdmin = false;
-        remove(ref(db, `admins/${userId}`));
         deactivateAdminUI();
         document.getElementById("adminPanelBtn").style.display = "none";
     }
 }
 
 function activateAdminUI() {
-    adminBtn.textContent = "Logout";
+    adminBtn.textContent = "Admin (UID)";
     usernameEl.innerHTML = `<span class="admin-badge">[ADMIN]</span><span class="admin-username">${username}</span>`;
     document.getElementById("adminPanelBtn").style.display = "block";
 }
@@ -218,7 +270,7 @@ async function switchChat(chatId) {
     if (!snapshot.exists()) {
         alert("Server not found.");
         validateSavedChats();
-        switchChat("public");
+        if (chatId !== "public") switchChat("public");
         return;
     }
 
@@ -255,7 +307,6 @@ function highlightActiveChat(chatId) {
         }
     });
 
-    // Handle public chat separately
     if (chatId === "public") {
         publicBtn.classList.add("active");
     } else {
@@ -269,7 +320,7 @@ function updatePlaceholder(chatName) {
 
 
 // CREATE/JOIN CHATS
-function createChat() {
+async function createChat() {
     if (myChats.length >= 5) {
         alert("Server limit reached");
         return;
@@ -280,18 +331,23 @@ function createChat() {
 
     const code = Math.random().toString(36).substring(2, 8);
 
-    set(ref(db, `chats/${code}`), {
+    await set(ref(db, `chats/${code}`), {
         name,
         createdAt: Date.now()
     });
 
+    // Add creator as member
+    if (uid) {
+        await set(ref(db, `chatMembers/${code}/${uid}`), true);
+    }
+
     addChatToSidebar(code, name);
     switchChat(code);
 
-    // Auto message
     push(ref(db, `chats/${code}/messages`), {
         text: `Server created. Your server code is: ${code}`,
         username: "Server Bot",
+        uid: "system",
         timestamp: Date.now(),
         isAdmin: false,
         isSystem: true
@@ -302,8 +358,8 @@ async function joinChat() {
     const code = prompt("Enter server code:");
     if (!code) return;
 
-    // Prevent joining twice
     if (myChats.some(c => c.code === code)) {
+        switchChat(code);
         return;
     }
 
@@ -324,18 +380,16 @@ async function joinChat() {
 
     let name = data.name;
     if (!name) {
-        name = `Chat ${code}`; // or any fallback you like
+        name = `Chat ${code}`;
         await set(ref(db, `chats/${code}/name`), name);
     }
 
-    // Add user to chatMembers
-    set(ref(db, `chatMembers/${code}/${userId}`), true);
+    if (uid) {
+        await set(ref(db, `chatMembers/${code}/${uid}`), true);
+    }
 
-    // Add to sidebar using the NAME
     addChatToSidebar(code, name);
-
     switchChat(code);
-
     setupNotificationListener(code);
 }
 
@@ -351,7 +405,7 @@ function addChatToSidebar(code, name) {
     row.title = code;
 
     const btn = document.createElement("button");
-    btn.textContent = name; // show the chat NAME
+    btn.textContent = name;
     btn.classList.add("chatButton");
     btn.dataset.chat = code;
     btn.addEventListener("click", () => switchChat(code));
@@ -381,24 +435,24 @@ async function leaveServer(code) {
     myChats = myChats.filter(c => c.code !== code);
     localStorage.setItem("myChats", JSON.stringify(myChats));
 
-    // Remove from sidebar
     const rows = [...myChatsContainer.children];
     const row = rows.find(r => r.dataset.chat === code);
     if (row) row.remove();
 
-    remove(ref(db, `chats/${code}/activeUsers/${userId}`));
-    remove(ref(db, `chatMembers/${code}/${userId}`));
+    if (uid) {
+        await remove(ref(db, `chats/${code}/activeUsers/${uid}`));
+        await remove(ref(db, `chatMembers/${code}/${uid}`));
+    }
 
     switchChat("public");
     updateNoServersMessage();
 
-    // If chat is empty, delete
     const membersRef = ref(db, `chatMembers/${code}`);
     const snapshot = await get(membersRef);
 
     if (!snapshot.exists()) {
-    remove(ref(db, `chats/${code}`));
-        remove(ref(db, `chatMembers/${code}`));
+        await remove(ref(db, `chats/${code}`));
+        await remove(ref(db, `chatMembers/${code}`));
     }
 }
 
@@ -412,19 +466,20 @@ function updateNoServersMessage() {
 
 
 // MESSAGE SENDING
-function sendMessage() {
+async function sendMessage() {
     const text = input.value.trim();
     if (!text || text.length > 500) return;
+    if (!uid) return;
 
     messagesRef = ref(db, `chats/${currentChat}/messages`);
 
-    push(messagesRef, {
+    await push(messagesRef, {
         text,
         username,
+        uid,
         timestamp: Date.now(),
         isAdmin
     });
-
 
     enforceMessageLimit();
     input.value = "";
@@ -463,7 +518,7 @@ function displayMessage(msg) {
     } else if (msg.isAdmin) {
         name.innerHTML = `<span class="admin-badge">[ADMIN]</span><span class="admin-username">${msg.username}</span>`;
     } else {
-    name.textContent = msg.username || "Anonymous";
+        name.textContent = msg.username || "Anonymous";
     }
 
     const time = document.createElement("span");
@@ -496,21 +551,19 @@ let presenceRef = null;
 let presenceUnsubs = [];
 
 function setupPresence(chatId) {
-    console.log("setupPresence called for", chatId);
+    if (!uid) return;
 
     presenceUnsubs.forEach(unsub => unsub());
     presenceUnsubs = [];
 
-    // Remove presence from previous chat
     if (presenceRef) {
-        const oldUserRef = child(presenceRef, userId);
+        const oldUserRef = child(presenceRef, uid);
         remove(oldUserRef);
     }
 
     presenceRef = ref(db, `chats/${chatId}/activeUsers`);
-    const userRef = child(presenceRef, userId);
+    const userRef = child(presenceRef, uid);
 
-    // Auto-remove on disconnect
     onDisconnect(userRef).remove();
 
     set(userRef, {
@@ -556,7 +609,7 @@ async function updateActiveUsersList() {
 }
 
 
-// UTILITY FUNCTIONS
+// NOTIFICATIONS
 function isNearBottom() {
     const threshold = 200;
     const distance = messagesDiv.scrollHeight - messagesDiv.scrollTop - messagesDiv.clientHeight;
@@ -568,20 +621,14 @@ function isTabActive() {
 }
 
 function maybeNotify(msg, chatId) {
-    // Don't notify if tab is active
     if (isTabActive()) return;
-
-    // Don't notify for your own messages
-    if (msg.username === username) return;
-
-    // Don't notify for system messages
+    if (msg.uid === uid) return;
     if (msg.isSystem) return;
 
     const title = `${msg.username} sent a message`;
     const body = `on server ${chatId}`;
 
-    new Notification(title, {body, requireInteraction: true});
-    console.log("maybeNotify triggered:", msg, chatId);
+    new Notification(title, { body, requireInteraction: true });
 }
 
 const notificationListeners = new Set();
@@ -599,44 +646,13 @@ function setupNotificationListener(chatId) {
 }
 
 
-// ADMIN PANEL
-// Open
+// ADMIN PANEL (UI only for now)
 document.getElementById("adminPanelBtn").addEventListener("click", () => {
     document.getElementById("adminPanel").classList.remove("hidden");
-    wireAdminButtons();
 });
 
-// Close
 document.getElementsByClassName("leaveChat")[0].addEventListener("click", () => {
     document.getElementById("adminPanel").classList.add("hidden");
 });
-
-const adminPanelBtn = document.getElementById("adminPanelBtn");
-
-async function checkAdminStatus() {
-    const adminRef = ref(db, `admins/${userId}`);
-    const snap = await get(adminRef);
-
-    if (snap.exists()) {
-        isAdmin = true;
-        activateAdminUI();
-        document.getElementById("adminPanelBtn").style.display = "block";
-    }
-}
-
-function wireAdminButtons() {
-    document.getElementById("clearMessagesBtn").onclick = () => clearMessages(currentChat);
-    document.getElementById("deleteChatBtn").onclick = () => deleteChat(currentChat);
-    document.getElementById("deletePrivateChatsBtn").onclick = deleteAllPrivateChats;
-    document.getElementById("deleteEmptyChatsBtn").onclick = deleteEmptyChats;
-    document.getElementById("resetActiveUsersBtn").onclick = resetActiveUsers;
-}
-
-
-
-
-
-
-
 
 
