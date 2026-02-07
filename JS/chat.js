@@ -59,6 +59,7 @@ window.onload = () => {
     attachUIListeners();
     switchChat("public");
     setupNotificationListener("public");
+    checkAdminStatus();
 
     if (Notification.permission !== "granted") {
         Notification.requestPermission();
@@ -75,15 +76,6 @@ function loadSavedUser() {
     }
     
     set(ref(db, `usernames/${userId}`), username);
-
-    if (localStorage.getItem("isAdmin") === "true") {
-        isAdmin = true;
-        activateAdminUI();
-    }
-
-    if (localStorage.getItem("isAdmin") === "true") {
-        document.getElementById("adminPanelBtn").style.display = "block";
-    }
 }
 
 async function loadSavedChats() {
@@ -192,7 +184,7 @@ function toggleAdmin() {
 
         if (key === ADMIN_KEY && pin === ADMIN_PIN) {
             isAdmin = true;
-            localStorage.setItem("isAdmin", "true");
+            set(ref(db, `admins/${userId}`), true);
             activateAdminUI();
             document.getElementById("adminPanelBtn").style.display = "block";
         } else {
@@ -200,7 +192,7 @@ function toggleAdmin() {
         }
     } else {
         isAdmin = false;
-        localStorage.removeItem("isAdmin");
+        remove(ref(db, `admins/${userId}`));
         deactivateAdminUI();
         document.getElementById("adminPanelBtn").style.display = "none";
     }
@@ -620,8 +612,15 @@ document.getElementsByClassName("leaveChat")[0].addEventListener("click", () => 
 
 const adminPanelBtn = document.getElementById("adminPanelBtn");
 
-if (localStorage.getItem("isAdmin") === "true") {
-    adminPanelBtn.style.display = "block";
+async function checkAdminStatus() {
+    const adminRef = ref(db, `admins/${userId}`);
+    const snap = await get(adminRef);
+
+    if (snap.exists()) {
+        isAdmin = true;
+        activateAdminUI();
+        document.getElementById("adminPanelBtn").style.display = "block";
+    }
 }
 
 function wireAdminButtons() {
