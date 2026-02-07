@@ -348,6 +348,7 @@ function addChatToSidebar(code, name) {
     const row = document.createElement("div");
     row.classList.add("chatRow");
     row.dataset.chat = code;
+    row.title = code;
 
     const btn = document.createElement("button");
     btn.textContent = name; // show the chat NAME
