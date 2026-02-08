@@ -1,3 +1,10 @@
+// AUTO-CLEANUP: Remove old localStorage userId if it exists
+if (localStorage.getItem("userId")) {
+    console.log("Old localStorage userId found — removing automatically.");
+    localStorage.removeItem("userId");
+}
+
+
 // IMPORTS
 import { db, auth } from "./firebase-init.js";
 import { 
