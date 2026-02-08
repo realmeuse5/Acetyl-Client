@@ -5,7 +5,9 @@ import { getDatabase } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-
 import {
     getAuth,
     onAuthStateChanged,
-    signInAnonymously
+    signInAnonymously,
+    setPersistence,
+    inMemoryPersistence
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
 const firebaseConfig = {
