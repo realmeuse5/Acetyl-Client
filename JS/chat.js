@@ -60,7 +60,13 @@ window.onload = () => {
 
 function waitForAuthReady() {
     const unsub = auth.onAuthStateChanged(async (user) => {
-        if (!user) return; // firebase-init will sign in
+        if (!user) {
+    console.warn("TEMP MODE: Using fake UID");
+    uid = "testUser123";
+    finishAppLoad(); // we will create this helper
+    return;
+}
+// ---------------------------------------------- if (!user) return; // firebase-init will sign in
 
         uid = user.uid;
         console.log("Auth ready, UID:", uid);
@@ -83,6 +89,20 @@ function waitForAuthReady() {
         }
     });
 }
+
+// -----------------------------------------------temporary
+async function finishAppLoad() {
+    await migrateOldIdentityIfNeeded(uid);
+    await loadSavedUser(uid);
+    await loadSavedChats();
+    await validateSavedChats();
+
+    attachUIListeners();
+    switchChat("public");
+    setupNotificationListener("public");
+    checkAdminStatus();
+}
+// -----------------------------------------------temporary
 
 // MIGRATION: from old localStorage userId → UID
 async function migrateOldIdentityIfNeeded(newUid) {

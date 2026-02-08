@@ -33,7 +33,7 @@ setPersistence(auth, inMemoryPersistence);
 // Auto sign-in
 onAuthStateChanged(auth, async (user) => {
     if (!user) {
-        await signInAnonymously(auth);
+        // await signInAnonymously(auth); <-------------------RIGHT HERE
         return;
     }
 
