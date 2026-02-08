@@ -438,7 +438,7 @@ async function leaveServer(code) {
         return;
     }
 
-    myChats = myChats.filter(c => c !== code);
+    myChats = myChats.filter(c => c.code !== code);
     localStorage.setItem("myChats", JSON.stringify(myChats));
 
     const rows = [...myChatsContainer.children];
