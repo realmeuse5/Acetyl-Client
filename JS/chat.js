@@ -1,7 +1,11 @@
-// AUTO-CLEANUP: Remove old localStorage userId if it exists
+// AUTO-CLEANUP
 if (localStorage.getItem("userId")) {
     console.log("Old localStorage userId found — removing automatically.");
     localStorage.removeItem("userId");
+}
+if (localStorage.getItem("isAdmin")) {
+    console.log("Old localStorage isAdmin found — removing automatically.");
+    localStorage.removeItem("isAdmin");
 }
 
 

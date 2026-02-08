@@ -25,6 +25,9 @@ const app = initializeApp(firebaseConfig);
 export const db = getDatabase(app);
 export const auth = getAuth(app);
 
+// FIX FOR SCHOOL CHROMEBOOKS — force RAM-only auth persistence
+setPersistence(auth, inMemoryPersistence);
+
 // Auto sign-in
 onAuthStateChanged(auth, async (user) => {
     if (!user) {
