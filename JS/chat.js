@@ -204,7 +204,7 @@ function attachUIListeners() {
     document.getElementById("joinChatBtn").addEventListener("click", joinChat);
 
     adminBtn.addEventListener("click", () => {
-        alert("Admin login is now managed by UID.\nAsk the owner to add your UID in /admins.");
+        alert("Admin login is now managed by UID.\nAsk realmeuseDev to make you an admin.");
     });
 
     input.addEventListener("keydown", (e) => {
@@ -258,13 +258,12 @@ async function checkAdminStatus() {
 }
 
 function activateAdminUI() {
-    adminBtn.textContent = "Admin (UID)";
     usernameEl.innerHTML = `<span class="admin-badge">[ADMIN]</span><span class="admin-username">${username}</span>`;
     document.getElementById("adminPanelBtn").style.display = "block";
 }
 
 function deactivateAdminUI() {
-    adminBtn.textContent = "Admin Login";
+    document.getElementById("adminPanelBtn").style.display = "none";
     usernameEl.textContent = username;
 }
 
