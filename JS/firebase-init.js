@@ -56,7 +56,6 @@ export async function initAuthMode() {
     }
 
     console.log("Running in FIREBASE AUTH MODE.");
-    await setPersistence(auth, inMemoryPersistence);
 
     // Auto sign-in (normal devices)
     onAuthStateChanged(auth, async (user) => {
