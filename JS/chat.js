@@ -8,9 +8,8 @@ if (localStorage.getItem("isAdmin")) {
     localStorage.removeItem("isAdmin");
 }
 
-
 // IMPORTS
-import { db, auth } from "./firebase-init.js";
+import { db, auth, noAuthMode, initAuthMode } from "./firebase-init.js";
 import { 
     ref, 
     push, 
@@ -23,7 +22,6 @@ import {
     set,
     onDisconnect
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
-
 
 // GLOBAL STATE
 let messagesDiv;
@@ -42,12 +40,11 @@ let unsubscribe = null;
 
 let myChats = JSON.parse(localStorage.getItem("myChats") || "[]");
 
-// We always use auth.currentUser.uid once Auth is ready.
+// We always use a UID: either Firebase Auth UID or our own fake UID.
 let uid = null;
 
-
 // ONLOAD
-window.onload = () => {
+window.onload = async () => {
     messagesDiv = document.getElementById("messages");
     input = document.getElementById("messageInput");
     usernameEl = document.getElementById("username");
@@ -55,42 +52,38 @@ window.onload = () => {
     myChatsContainer = document.getElementById("myChats");
     msg = document.getElementById("noServersMsg");
 
-    waitForAuthReady();
+    await initAuthMode();   // decide auth vs no-auth based on IndexedDB
+
+    if (noAuthMode) {
+        // NO-AUTH MODE: generate or reuse our own UID
+        uid = localStorage.getItem("fakeUid");
+        if (!uid) {
+            uid = crypto.randomUUID();
+            localStorage.setItem("fakeUid", uid);
+        }
+        console.log("NO-AUTH MODE UID:", uid);
+        await finishAppLoad();
+    } else {
+        // FIREBASE AUTH MODE
+        waitForAuthReady();
+    }
 };
 
 function waitForAuthReady() {
     const unsub = auth.onAuthStateChanged(async (user) => {
         if (!user) {
-    console.warn("TEMP MODE: Using fake UID");
-    uid = "testUser123";
-    finishAppLoad(); // we will create this helper
-    return;
-}
-// ---------------------------------------------- if (!user) return; // firebase-init will sign in
+            // firebase-init will sign in anonymously
+            return;
+        }
 
         uid = user.uid;
         console.log("Auth ready, UID:", uid);
 
         unsub();
-
-        await migrateOldIdentityIfNeeded(uid);
-
-        await loadSavedUser(uid);
-        await loadSavedChats();
-        await validateSavedChats();
-
-        attachUIListeners();
-        switchChat("public");
-        setupNotificationListener("public");
-        checkAdminStatus();
-
-        if (Notification.permission !== "granted") {
-            Notification.requestPermission();
-        }
+        await finishAppLoad();
     });
 }
 
-// -----------------------------------------------temporary
 async function finishAppLoad() {
     await migrateOldIdentityIfNeeded(uid);
     await loadSavedUser(uid);
@@ -101,8 +94,11 @@ async function finishAppLoad() {
     switchChat("public");
     setupNotificationListener("public");
     checkAdminStatus();
+
+    if (Notification.permission !== "granted") {
+        Notification.requestPermission();
+    }
 }
-// -----------------------------------------------temporary
 
 // MIGRATION: from old localStorage userId → UID
 async function migrateOldIdentityIfNeeded(newUid) {
@@ -144,7 +140,6 @@ async function migrateOldIdentityIfNeeded(newUid) {
     console.log("Migration complete for", oldId);
 }
 
-
 // LOAD USER + CHATS 
 async function loadSavedUser(currentUid) {
     const savedName = localStorage.getItem("username");
@@ -154,7 +149,6 @@ async function loadSavedUser(currentUid) {
         usernameEl.textContent = username;
         await set(ref(db, `users/${currentUid}/username`), username);
     } else {
-        // Try to load from DB if exists
         const userRef = ref(db, `users/${currentUid}/username`);
         const snap = await get(userRef);
         if (snap.exists()) {

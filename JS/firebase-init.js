@@ -1,7 +1,6 @@
 // firebase-init.js
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getDatabase } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
-
 import {
     getAuth,
     onAuthStateChanged,
@@ -23,20 +22,49 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
-// Export database + auth
 export const db = getDatabase(app);
 export const auth = getAuth(app);
 
-// FIX FOR SCHOOL CHROMEBOOKS — force RAM-only auth persistence
-setPersistence(auth, inMemoryPersistence);
+// --- Hybrid mode flag
+export let noAuthMode = false;
 
-// Auto sign-in
-onAuthStateChanged(auth, async (user) => {
-    if (!user) {
-        // await signInAnonymously(auth); <-------------------RIGHT HERE
-        return;
+// Detect if IndexedDB is blocked (restricted environment → no-auth mode)
+async function isIndexedDBBlocked() {
+    return new Promise(resolve => {
+        let dbTest;
+        try {
+            const request = indexedDB.open("test-db-for-auth-check");
+            request.onerror = () => resolve(true);   // blocked
+            request.onsuccess = () => {
+                dbTest = request.result;
+                dbTest.close();
+                resolve(false); // allowed
+            };
+        } catch (e) {
+            resolve(true); // blocked
+        }
+    });
+}
+
+export async function initAuthMode() {
+    const blocked = await isIndexedDBBlocked();
+    noAuthMode = blocked;
+
+    if (noAuthMode) {
+        console.warn("Running in NO-AUTH MODE (restricted device detected).");
+        return; // do NOT set persistence, do NOT sign in
     }
 
-    // User is signed in with a real UID now
-    console.log("Firebase Auth UID:", user.uid);
-});
+    console.log("Running in FIREBASE AUTH MODE.");
+    await setPersistence(auth, inMemoryPersistence);
+
+    // Auto sign-in (normal devices)
+    onAuthStateChanged(auth, async (user) => {
+        if (!user) {
+            await signInAnonymously(auth);
+            return;
+        }
+
+        console.log("Firebase Auth UID:", user.uid);
+    });
+}
