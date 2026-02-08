@@ -438,17 +438,17 @@ async function leaveServer(code) {
         return;
     }
 
-    myChats = myChats.filter(c => c.code !== code);
+    myChats = myChats.filter(c => c !== code);
     localStorage.setItem("myChats", JSON.stringify(myChats));
 
     const rows = [...myChatsContainer.children];
     const row = rows.find(r => r.dataset.chat === code);
     if (row) row.remove();
 
-    if (uid) {
-        await remove(ref(db, `chats/${code}/activeUsers/${uid}`));
-        await remove(ref(db, `chatMembers/${code}/${uid}`));
-    }
+    const uid = auth.currentUser.uid;
+
+    await remove(ref(db, `chats/${code}/activeUsers/${uid}`));
+    await remove(ref(db, `chatMembers/${code}/${uid}`));
 
     switchChat("public");
     updateNoServersMessage();
