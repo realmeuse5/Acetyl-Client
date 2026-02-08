@@ -43,6 +43,14 @@ let myChats = JSON.parse(localStorage.getItem("myChats") || "[]");
 // We always use a UID: either Firebase Auth UID or our own fake UID.
 let uid = null;
 
+function writeOptions() {
+    if (noAuthMode) {
+        return { auth: { uid } };
+    }
+    return {}; // Firebase Auth mode
+}
+
+
 // ONLOAD
 window.onload = async () => {
     messagesDiv = document.getElementById("messages");
@@ -85,7 +93,6 @@ function waitForAuthReady() {
 }
 
 async function finishAppLoad() {
-    await migrateOldIdentityIfNeeded(uid);
     await loadSavedUser(uid);
     await loadSavedChats();
     await validateSavedChats();
@@ -100,45 +107,6 @@ async function finishAppLoad() {
     }
 }
 
-// MIGRATION: from old localStorage userId → UID
-async function migrateOldIdentityIfNeeded(newUid) {
-    const oldId = localStorage.getItem("userId");
-    if (!oldId || oldId === newUid) return;
-
-    console.log("Found oldId, migrating:", oldId, "→", newUid);
-
-    // 1) Migrate username: usernames/<oldId> → users/<newUid>/username
-    const oldUsernameRef = ref(db, `usernames/${oldId}`);
-    const oldUsernameSnap = await get(oldUsernameRef);
-
-    if (oldUsernameSnap.exists()) {
-        const oldName = oldUsernameSnap.val();
-        await set(ref(db, `users/${newUid}/username`), oldName);
-        await remove(oldUsernameRef);
-        localStorage.setItem("username", oldName);
-        console.log("Migrated username:", oldName);
-    }
-
-    // 2) Migrate chat membership: chatMembers/<chat>/<oldId> → chatMembers/<chat>/<newUid>
-    const chatMembersRoot = ref(db, "chatMembers");
-    const chatMembersSnap = await get(chatMembersRoot);
-
-    if (chatMembersSnap.exists()) {
-        const allChats = chatMembersSnap.val();
-        for (const chatCode of Object.keys(allChats)) {
-            const members = allChats[chatCode];
-            if (members && members[oldId]) {
-                await set(ref(db, `chatMembers/${chatCode}/${newUid}`), true);
-                await remove(ref(db, `chatMembers/${chatCode}/${oldId}`));
-                console.log(`Migrated chat membership in ${chatCode}`);
-            }
-        }
-    }
-
-    // Remove old local ID
-    localStorage.removeItem("userId");
-    console.log("Migration complete for", oldId);
-}
 
 // LOAD USER + CHATS 
 async function loadSavedUser(currentUid) {
@@ -147,7 +115,7 @@ async function loadSavedUser(currentUid) {
     if (savedName) {
         username = savedName;
         usernameEl.textContent = username;
-        await set(ref(db, `users/${currentUid}/username`), username);
+        await set(ref(db, `users/${currentUid}/username`), username, writeOptions());
     } else {
         const userRef = ref(db, `users/${currentUid}/username`);
         const snap = await get(userRef);
@@ -158,7 +126,7 @@ async function loadSavedUser(currentUid) {
         } else {
             username = "Anonymous";
             usernameEl.textContent = username;
-            await set(userRef, username);
+            await set(userRef, username, writeOptions());
         }
     }
 }
@@ -174,7 +142,7 @@ async function loadSavedChats() {
 
         if (!name) {
             name = `Chat ${code}`;
-            await set(ref(db, `chats/${code}/name`), name);
+            await set(ref(db, `chats/${code}/name`), name, writeOptions());
         }
 
         upgraded.push({ code, name });
@@ -200,7 +168,7 @@ async function validateSavedChats() {
         } else {
             console.log(`Removing deleted server: ${code}`);
             if (uid) {
-                remove(ref(db, `chatMembers/${code}/${uid}`));
+                await remove(ref(db, `chatMembers/${code}/${uid}`), writeOptions());
             }
         }
     }
@@ -244,16 +212,16 @@ async function changeUsername() {
 
     if (!uid) return;
 
-    await set(ref(db, `users/${uid}/username`), username);
+    await set(ref(db, `users/${uid}/username`), username, writeOptions());
 
     // Update presence username in all joined chats
     myChats.forEach(chat => {
         const userRef = ref(db, `chats/${chat.code}/activeUsers/${uid}`);
         set(userRef, {
-            username: username,
+            username,
             lastSeen: Date.now()
+            }, writeOptions());
         });
-    });
 }
 
 
@@ -355,27 +323,29 @@ async function createChat() {
 
     const code = Math.random().toString(36).substring(2, 8);
 
+    // Create chat
     await set(ref(db, `chats/${code}`), {
         name,
         createdAt: Date.now()
-    });
+    }, writeOptions());  
 
     // Add creator as member
     if (uid) {
-        await set(ref(db, `chatMembers/${code}/${uid}`), true);
+        await set(ref(db, `chatMembers/${code}/${uid}`), true, writeOptions());  
     }
 
     addChatToSidebar(code, name);
     switchChat(code);
 
-    push(ref(db, `chats/${code}/messages`), {
+    // System message
+    await push(ref(db, `chats/${code}/messages`), {
         text: `Server created. Your server code is: ${code}`,
         username: "Server Bot",
         uid: "system",
         timestamp: Date.now(),
         isAdmin: false,
         isSystem: true
-    });
+    }, writeOptions());  
 }
 
 async function joinChat() {
@@ -405,11 +375,11 @@ async function joinChat() {
     let name = data.name;
     if (!name) {
         name = `Chat ${code}`;
-        await set(ref(db, `chats/${code}/name`), name);
+        await set(ref(db, `chats/${code}/name`), name, writeOptions()); 
     }
 
     if (uid) {
-        await set(ref(db, `chatMembers/${code}/${uid}`), true);
+        await set(ref(db, `chatMembers/${code}/${uid}`), true, writeOptions());  
     }
 
     addChatToSidebar(code, name);
@@ -456,27 +426,30 @@ async function leaveServer(code) {
         return;
     }
 
+    // Remove from local list
     myChats = myChats.filter(c => c.code !== code);
     localStorage.setItem("myChats", JSON.stringify(myChats));
 
+    // Remove from sidebar UI
     const rows = [...myChatsContainer.children];
     const row = rows.find(r => r.dataset.chat === code);
     if (row) row.remove();
 
-    const uid = auth.currentUser.uid;
+    // IMPORTANT: use global uid, not auth.currentUser.uid
+    await remove(ref(db, `chats/${code}/activeUsers/${uid}`), writeOptions());
+    await remove(ref(db, `chatMembers/${code}/${uid}`), writeOptions());
 
-    await remove(ref(db, `chats/${code}/activeUsers/${uid}`));
-    await remove(ref(db, `chatMembers/${code}/${uid}`));
-
+    // Switch back to public
     switchChat("public");
     updateNoServersMessage();
 
+    // If no members remain, delete the chat entirely
     const membersRef = ref(db, `chatMembers/${code}`);
     const snapshot = await get(membersRef);
 
     if (!snapshot.exists()) {
-        await remove(ref(db, `chats/${code}`));
-        await remove(ref(db, `chatMembers/${code}`));
+        await remove(ref(db, `chats/${code}`), writeOptions());
+        await remove(ref(db, `chatMembers/${code}`), writeOptions());
     }
 }
 
@@ -497,13 +470,15 @@ async function sendMessage() {
 
     messagesRef = ref(db, `chats/${currentChat}/messages`);
 
-    await push(messagesRef, {
+    const messageData = {
         text,
         username,
         uid,
         timestamp: Date.now(),
         isAdmin
-    });
+    };
+
+    await push(messagesRef, messageData, writeOptions());
 
     enforceMessageLimit();
     input.value = "";
@@ -519,7 +494,7 @@ async function enforceMessageLimit() {
     if (keys.length > 50) {
         const excess = keys.length - 50;
         for (let i = 0; i < excess; i++) {
-            await remove(child(messagesRef, keys[i]));
+            await remove(child(messagesRef, keys[i]), writeOptions());
         }
     }
 }
@@ -582,18 +557,18 @@ function setupPresence(chatId) {
 
     if (presenceRef) {
         const oldUserRef = child(presenceRef, uid);
-        remove(oldUserRef);
+        remove(oldUserRef, writeOptions());
     }
 
     presenceRef = ref(db, `chats/${chatId}/activeUsers`);
     const userRef = child(presenceRef, uid);
 
-    onDisconnect(userRef).remove();
+    onDisconnect(userRef).remove(writeOptions());
 
     set(userRef, {
         username: username,
         lastSeen: Date.now()
-    });
+    }, writeOptions() );
 
     presenceUnsubs.push(onChildAdded(presenceRef, updateActiveUsersList));
     presenceUnsubs.push(onChildRemoved(presenceRef, updateActiveUsersList));
