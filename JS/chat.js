@@ -40,7 +40,7 @@ let unsubscribe = null;
 
 let myChats = JSON.parse(localStorage.getItem("myChats") || "[]");
 
-// We always use a UID: either Firebase Auth UID or our own fake UID.
+// Always use a UID
 let uid = null;
 
 function writeOptions() {
@@ -49,6 +49,8 @@ function writeOptions() {
     }
     return {}; // Firebase Auth mode
 }
+
+let attachedFile = null;
 
 
 // ONLOAD
@@ -59,11 +61,14 @@ window.onload = async () => {
     adminBtn = document.getElementById("adminLogin");
     myChatsContainer = document.getElementById("myChats");
     msg = document.getElementById("noServersMsg");
+    const fileInput = document.getElementById("fileInput");
+    const attachBtn = document.getElementById("attachBtn");
+    const attachedFileLabel = document.getElementById("attachedFileLabel");
 
-    await initAuthMode();   // decide auth vs no-auth based on IndexedDB
+    await initAuthMode(); 
 
     if (noAuthMode) {
-        // NO-AUTH MODE: generate or reuse our own UID
+        // No-Auth Mode: generate or reuse our own UID
         uid = localStorage.getItem("fakeUid");
         if (!uid) {
             uid = crypto.randomUUID();
@@ -72,7 +77,7 @@ window.onload = async () => {
         console.log("NO-AUTH MODE UID:", uid);
         await finishAppLoad();
     } else {
-        // FIREBASE AUTH MODE
+        // Firebase Auth Mode
         waitForAuthReady();
     }
 };
@@ -80,7 +85,6 @@ window.onload = async () => {
 function waitForAuthReady() {
     const unsub = auth.onAuthStateChanged(async (user) => {
         if (!user) {
-            // firebase-init will sign in anonymously
             return;
         }
 
@@ -189,14 +193,34 @@ function attachUIListeners() {
     document.getElementById("createChatBtn").addEventListener("click", createChat);
     document.getElementById("joinChatBtn").addEventListener("click", joinChat);
 
-    adminBtn.addEventListener("click", () => {
-        alert("Admin login is now managed by UID.\nAsk realmeuseDev to make you an admin.");
-    });
+    adminBtn.addEventListener("click", () => {alert("Admin login is now managed by UID.\nAsk realmeuseDev to make you an admin.");});
 
     input.addEventListener("keydown", (e) => {
         if (e.key === "Enter") sendMessage();
     });
+
+    attachBtn.addEventListener("click", () => {fileInput.click();});
+
+    fileInput.addEventListener("change", () => {
+        const file = fileInput.files[0];
+        if (!file) return;
+
+        const maxSize = 5 * 1024 * 1024; // 5 MB
+
+        if (file.size > maxSize) {
+            alert("File too large (max 5 MB).");
+            fileInput.value = "";
+            attachedFile = null;
+            attachedFileLabel.classList.add("hidden");
+            return;
+        }
+
+        attachedFile = file;
+        attachedFileLabel.textContent = `Attached: ${file.name}`;
+        attachedFileLabel.classList.remove("hidden");
+    });
 }
+
 
 // USERNAME MANAGEMENT
 async function changeUsername() {
@@ -435,7 +459,6 @@ async function leaveServer(code) {
     const row = rows.find(r => r.dataset.chat === code);
     if (row) row.remove();
 
-    // IMPORTANT: use global uid, not auth.currentUser.uid
     await remove(ref(db, `chats/${code}/activeUsers/${uid}`), writeOptions());
     await remove(ref(db, `chatMembers/${code}/${uid}`), writeOptions());
 
@@ -464,24 +487,55 @@ function updateNoServersMessage() {
 
 // MESSAGE SENDING
 async function sendMessage() {
-    const text = input.value.trim();
-    if (!text || text.length > 500) return;
+    const text = messageInput.value.trim();
+
+    if (!text && !attachedFile) return;
     if (!uid) return;
 
-    messagesRef = ref(db, `chats/${currentChat}/messages`);
+    const messagesRef = ref(db, `chats/${currentChat}/messages`);
 
+    let fileData = null;
+
+    // If a file is attached, upload it
+    if (attachedFile) {
+        const path = `chatFiles/${currentChat}/${Date.now()}_${attachedFile.name}`;
+        const fileRef = storageRef(storage, path);
+
+        // Upload file to Firebase Storage
+        await uploadBytes(fileRef, attachedFile);
+
+        // Get public download URL
+        const url = await getDownloadURL(fileRef);
+
+        // Store metadata to save in the message
+        fileData = {
+            fileUrl: url,
+            fileName: attachedFile.name,
+            fileType: attachedFile.type || "application/octet-stream",
+            fileSize: attachedFile.size,
+            storagePath: path
+        };
+    }
+
+    // Build message object
     const messageData = {
-        text,
+        text: text || null,
         username,
         uid,
         timestamp: Date.now(),
-        isAdmin
+        isAdmin,
+        ...fileData
     };
 
     await push(messagesRef, messageData, writeOptions());
 
     enforceMessageLimit();
-    input.value = "";
+
+    messageInput.value = "";
+    attachedFile = null;
+    fileInput.value = "";
+    attachedFileLabel.textContent = "";
+    attachedFileLabel.classList.add("hidden");
 }
 
 async function enforceMessageLimit() {
@@ -494,7 +548,20 @@ async function enforceMessageLimit() {
     if (keys.length > 50) {
         const excess = keys.length - 50;
         for (let i = 0; i < excess; i++) {
-            await remove(child(messagesRef, keys[i]), writeOptions());
+            const key = keys[i];
+            const msg = messages[key];
+
+            // Delete file from Storage if it exists
+            if (msg.storagePath) {
+                try {
+                    const fileRef = storageRef(storage, msg.storagePath);
+                    await deleteObject(fileRef);
+                } catch (e) {
+                    console.warn("Failed to delete file:", e);
+                }
+            }
+
+            await remove(child(messagesRef, key), writeOptions());
         }
     }
 }
@@ -529,13 +596,41 @@ function displayMessage(msg) {
 
     header.appendChild(name);
     header.appendChild(time);
-
-    const text = document.createElement("span");
-    text.classList.add("text");
-    text.textContent = msg.text;
-
     wrapper.appendChild(header);
-    wrapper.appendChild(text);
+
+    // Text Content
+    if (msg.text) {
+        const text = document.createElement("span");
+        text.classList.add("text");
+        text.textContent = msg.text;
+        wrapper.appendChild(text);
+    }
+
+    // File content
+    if (msg.fileUrl) {
+        const fileContainer = document.createElement("div");
+        fileContainer.classList.add("file-attachment");
+
+        const isImage = msg.fileType && msg.fileType.startsWith("image/");
+
+        if (isImage) {
+            const img = document.createElement("img");
+            img.src = msg.fileUrl;
+            img.alt = msg.fileName || "image";
+            img.classList.add("attached-image");
+            fileContainer.appendChild(img);
+        } else {
+            const link = document.createElement("a");
+            link.href = msg.fileUrl;
+            link.target = "_blank";
+            link.rel = "noopener noreferrer";
+            link.textContent = msg.fileName || "Download file";
+            link.classList.add("file-link");
+            fileContainer.appendChild(link);
+        }
+
+        wrapper.appendChild(fileContainer);
+    }
 
     messagesDiv.appendChild(wrapper);
 

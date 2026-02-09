@@ -43,7 +43,18 @@
                 <div id="messages"></div>
             </div>
 
-            <input type="text" id="messageInput" placeholder="Message @[name of chat]">
+            <div id="messageBar">
+                <span id="attachedFileLabel" class="hidden"></span>
+
+                <div id="messageRow">
+                    <input type="file" id="fileInput" class="hidden">
+
+                    <button id="attachBtn" class="attach-btn">+</button>
+
+                    <input type="text" id="messageInput" placeholder="Message @[name of chat]">
+                </div>
+
+            </div>
 
         </div>
 
