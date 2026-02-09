@@ -24,6 +24,11 @@ const firebaseConfig = {
   appId: "1:29132435438:web:6602c5cd4cbb853a8128ff"
 };
 
+const supabase = createClient(
+  "https://eitasikltwqslftycwwm.supabase.co",
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVpdGFzaWtsdHdxc2xmdHljd3dtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA1OTczMzUsImV4cCI6MjA4NjE3MzMzNX0.sddj2Dc4iPHo4A04YRGCI5aJPyTDkXW8lk07iTdQeXM"
+);
+
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
@@ -73,3 +78,23 @@ export async function initAuthMode() {
         console.log("Firebase Auth UID:", user.uid);
     });
 }
+
+export async function uploadFileToSupabase(file, chatId) {
+  const filePath = `${chatId}/${Date.now()}_${file.name}`;
+
+  const { data, error } = await supabase.storage
+    .from("chat-files")
+    .upload(filePath, file);
+
+  if (error) {
+    console.error("Supabase upload failed:", error);
+    return null;
+  }
+
+  const { data: publicUrlData } = supabase.storage
+    .from("chat-files")
+    .getPublicUrl(filePath);
+
+  return publicUrlData.publicUrl;
+}
+

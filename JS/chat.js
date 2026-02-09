@@ -9,7 +9,7 @@ if (localStorage.getItem("isAdmin")) {
 }
 
 // IMPORTS
-import { db, auth, noAuthMode, initAuthMode, storage } from "./firebase-init.js";
+import { db, auth, noAuthMode, initAuthMode, storage, uploadFileToSupabase } from "./firebase-init.js";
 import { 
     ref, 
     push, 
@@ -488,43 +488,45 @@ function updateNoServersMessage() {
 // MESSAGE SENDING
 async function sendMessage() {
     const text = input.value.trim();
+    const file = attachedFile;
 
-    if (!text && !attachedFile) return;
-    if (!uid) return;
+    if (!text && !file) return;
+
+    if (text.length > 500) {
+        return;
+    }
+
+    if (!noAuthMode && !uid) return;
 
     messagesRef = ref(db, `chats/${currentChat}/messages`);
 
-    let fileData = null;
+    // Upload file to Supabase if present
+    let fileUrl = null;
+    let fileName = null;
+    let fileType = null;
 
-    // If a file is attached, upload it
-    if (attachedFile) {
-        const path = `chatFiles/${currentChat}/${Date.now()}_${attachedFile.name}`;
-        const fileRef = storageRef(storage, path);
+    if (file) {
+        fileUrl = await uploadFileToSupabase(file, currentChat);
 
-        // Upload file to Firebase Storage
-        await uploadBytes(fileRef, attachedFile);
+        if (!fileUrl) {
+            alert("File upload failed.");
+            return;
+        }
 
-        // Get public download URL
-        const url = await getDownloadURL(fileRef);
-
-        // Store metadata to save in the message
-        fileData = {
-            fileUrl: url,
-            fileName: attachedFile.name,
-            fileType: attachedFile.type || "application/octet-stream",
-            fileSize: attachedFile.size,
-            storagePath: path
-        };
+        fileName = file.name;
+        fileType = file.type;
     }
 
     // Build message object
     const messageData = {
         text: text || null,
-        username,
-        uid,
+        username: username,
+        uid: uid || "no-auth",
         timestamp: Date.now(),
-        isAdmin,
-        ...fileData
+        isAdmin: isAdmin || false,
+        fileUrl: fileUrl,
+        fileName: fileName,
+        fileType: fileType
     };
 
     await push(messagesRef, messageData, writeOptions());
@@ -534,8 +536,6 @@ async function sendMessage() {
     input.value = "";
     attachedFile = null;
     fileInput.value = "";
-    attachedFileLabel.textContent = "";
-    attachedFileLabel.classList.add("hidden");
 }
 
 async function enforceMessageLimit() {
@@ -611,15 +611,41 @@ function displayMessage(msg) {
         const fileContainer = document.createElement("div");
         fileContainer.classList.add("file-attachment");
 
-        const isImage = msg.fileType && msg.fileType.startsWith("image/");
+        const type = msg.fileType || "";
 
-        if (isImage) {
+        // IMAGE PREVIEW
+        if (type.startsWith("image/")) {
             const img = document.createElement("img");
             img.src = msg.fileUrl;
             img.alt = msg.fileName || "image";
             img.classList.add("attached-image");
             fileContainer.appendChild(img);
-        } else {
+        }
+
+        // PDF PREVIEW
+        else if (type === "application/pdf") {
+            const pdfLink = document.createElement("a");
+            pdfLink.href = msg.fileUrl;
+            pdfLink.target = "_blank";
+            pdfLink.rel = "noopener noreferrer";
+            pdfLink.textContent = `📄 ${msg.fileName || "Open PDF"}`;
+            pdfLink.classList.add("file-link");
+            fileContainer.appendChild(pdfLink);
+        }
+
+        // HTML FILE PREVIEW
+        else if (type === "text/html") {
+            const htmlLink = document.createElement("a");
+            htmlLink.href = msg.fileUrl;
+            htmlLink.target = "_blank";
+            htmlLink.rel = "noopener noreferrer";
+            htmlLink.textContent = `🌐 ${msg.fileName || "Open HTML File"}`;
+            htmlLink.classList.add("file-link");
+            fileContainer.appendChild(htmlLink);
+        }
+
+        // FALLBACK FOR ANY OTHER FILE TYPE
+        else {
             const link = document.createElement("a");
             link.href = msg.fileUrl;
             link.target = "_blank";
