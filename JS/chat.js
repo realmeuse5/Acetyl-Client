@@ -1,15 +1,5 @@
-// AUTO-CLEANUP
-if (localStorage.getItem("userId")) {
-    console.log("Old localStorage userId found — removing automatically.");
-    localStorage.removeItem("userId");
-}
-if (localStorage.getItem("isAdmin")) {
-    console.log("Old localStorage isAdmin found — removing automatically.");
-    localStorage.removeItem("isAdmin");
-}
-
 // IMPORTS
-import { db, auth, noAuthMode, initAuthMode, storage, uploadFileToSupabase } from "./firebase-init.js";
+import { db, auth, noAuthMode, initAuthMode } from "./firebase-init.js";
 import { 
     ref, 
     push, 
@@ -34,7 +24,12 @@ let msg;
 let username = "Anonymous";
 let isAdmin = false;
 
-let currentChat = "public";
+export let currentChat = "public";
+
+export function setCurrentChat(id) {
+    currentChat = id;
+}
+
 let messagesRef = null;
 let unsubscribe = null;
 
@@ -294,20 +289,20 @@ async function switchChat(chatId) {
     const chatName = data.name || chatId;
 
     updatePlaceholder(chatName);
-    currentChat = chatId;
+    setCurrentChat(chatId);  
     setupPresence(chatId);
 
     highlightActiveChat(chatId);
 
     if (unsubscribe) unsubscribe();
 
-    messagesRef = ref(db, `chats/${currentChat}/messages`);
+    messagesRef = ref(db, `chats/${chatId}/messages`);
     messagesDiv.innerHTML = "";
 
     unsubscribe = onChildAdded(messagesRef, (snapshot) => {
         const msg = snapshot.val();
         displayMessage(msg);
-        maybeNotify(msg, currentChat);
+        maybeNotify(msg, chatId);
     });
 }
 
@@ -491,23 +486,16 @@ async function sendMessage() {
     const file = attachedFile;
 
     if (!text && !file) return;
-
-    if (text.length > 500) {
-        return;
-    }
-
+    if (text.length > 500) return;
     if (!noAuthMode && !uid) return;
 
-    messagesRef = ref(db, `chats/${currentChat}/messages`);
+    const messagesRef = ref(db, `chats/${currentChat}/messages`);
 
-    // Upload file to Supabase if present
     let fileUrl = null;
     let fileName = null;
     let fileType = null;
 
     if (file) {
-        fileUrl = await uploadFileToSupabase(file, currentChat);
-
         if (!fileUrl) {
             alert("File upload failed.");
             return;
@@ -517,16 +505,15 @@ async function sendMessage() {
         fileType = file.type;
     }
 
-    // Build message object
     const messageData = {
         text: text || null,
         username: username,
         uid: uid || "no-auth",
         timestamp: Date.now(),
         isAdmin: isAdmin || false,
-        fileUrl: fileUrl,
-        fileName: fileName,
-        fileType: fileType
+        fileUrl,
+        fileName,
+        fileType
     };
 
     await push(messagesRef, messageData, writeOptions());
@@ -536,34 +523,6 @@ async function sendMessage() {
     input.value = "";
     attachedFile = null;
     fileInput.value = "";
-}
-
-async function enforceMessageLimit() {
-    const snapshot = await get(messagesRef);
-    if (!snapshot.exists()) return;
-
-    const messages = snapshot.val();
-    const keys = Object.keys(messages).sort();
-
-    if (keys.length > 50) {
-        const excess = keys.length - 50;
-        for (let i = 0; i < excess; i++) {
-            const key = keys[i];
-            const msg = messages[key];
-
-            // Delete file from Storage if it exists
-            if (msg.storagePath) {
-                try {
-                    const fileRef = storageRef(storage, msg.storagePath);
-                    await deleteObject(fileRef);
-                } catch (e) {
-                    console.warn("Failed to delete file:", e);
-                }
-            }
-
-            await remove(child(messagesRef, key), writeOptions());
-        }
-    }
 }
 
 
@@ -604,58 +563,6 @@ function displayMessage(msg) {
         text.classList.add("text");
         text.textContent = msg.text;
         wrapper.appendChild(text);
-    }
-
-    // File content
-    if (msg.fileUrl) {
-        const fileContainer = document.createElement("div");
-        fileContainer.classList.add("file-attachment");
-
-        const type = msg.fileType || "";
-
-        // IMAGE PREVIEW
-        if (type.startsWith("image/")) {
-            const img = document.createElement("img");
-            img.src = msg.fileUrl;
-            img.alt = msg.fileName || "image";
-            img.classList.add("attached-image");
-            fileContainer.appendChild(img);
-        }
-
-        // PDF PREVIEW
-        else if (type === "application/pdf") {
-            const pdfLink = document.createElement("a");
-            pdfLink.href = msg.fileUrl;
-            pdfLink.target = "_blank";
-            pdfLink.rel = "noopener noreferrer";
-            pdfLink.textContent = `📄 ${msg.fileName || "Open PDF"}`;
-            pdfLink.classList.add("file-link");
-            fileContainer.appendChild(pdfLink);
-        }
-
-        // HTML FILE PREVIEW
-        else if (type === "text/html") {
-            const htmlLink = document.createElement("a");
-            htmlLink.href = msg.fileUrl;
-            htmlLink.target = "_blank";
-            htmlLink.rel = "noopener noreferrer";
-            htmlLink.textContent = `🌐 ${msg.fileName || "Open HTML File"}`;
-            htmlLink.classList.add("file-link");
-            fileContainer.appendChild(htmlLink);
-        }
-
-        // FALLBACK FOR ANY OTHER FILE TYPE
-        else {
-            const link = document.createElement("a");
-            link.href = msg.fileUrl;
-            link.target = "_blank";
-            link.rel = "noopener noreferrer";
-            link.textContent = msg.fileName || "Download file";
-            link.classList.add("file-link");
-            fileContainer.appendChild(link);
-        }
-
-        wrapper.appendChild(fileContainer);
     }
 
     messagesDiv.appendChild(wrapper);
