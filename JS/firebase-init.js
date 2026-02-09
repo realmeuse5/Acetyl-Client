@@ -24,7 +24,7 @@ const firebaseConfig = {
   appId: "1:29132435438:web:6602c5cd4cbb853a8128ff"
 };
 
-const supabase = createClient(
+const supabase = window.supabase.createClient(
   "https://eitasikltwqslftycwwm.supabase.co",
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVpdGFzaWtsdHdxc2xmdHljd3dtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA1OTczMzUsImV4cCI6MjA4NjE3MzMzNX0.sddj2Dc4iPHo4A04YRGCI5aJPyTDkXW8lk07iTdQeXM"
 );
