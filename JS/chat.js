@@ -9,7 +9,7 @@ if (localStorage.getItem("isAdmin")) {
 }
 
 // IMPORTS
-import { db, auth, noAuthMode, initAuthMode } from "./firebase-init.js";
+import { db, auth, noAuthMode, initAuthMode, storage } from "./firebase-init.js";
 import { 
     ref, 
     push, 
@@ -487,12 +487,12 @@ function updateNoServersMessage() {
 
 // MESSAGE SENDING
 async function sendMessage() {
-    const text = messageInput.value.trim();
+    const text = input.value.trim();
 
     if (!text && !attachedFile) return;
     if (!uid) return;
 
-    const messagesRef = ref(db, `chats/${currentChat}/messages`);
+    messagesRef = ref(db, `chats/${currentChat}/messages`);
 
     let fileData = null;
 
@@ -531,7 +531,7 @@ async function sendMessage() {
 
     enforceMessageLimit();
 
-    messageInput.value = "";
+    input.value = "";
     attachedFile = null;
     fileInput.value = "";
     attachedFileLabel.textContent = "";

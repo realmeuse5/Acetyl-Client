@@ -29,6 +29,7 @@ const app = initializeApp(firebaseConfig);
 
 export const db = getDatabase(app);
 export const auth = getAuth(app);
+export const storage = getStorage(app);
 
 // --- Hybrid mode flag
 export let noAuthMode = false;
