@@ -524,3 +524,40 @@ body {
 #adminPanelBtn {
     display: none;
 }
+
+.admin-close {
+    width: 18px;
+    height: 18px;
+    position: relative;
+    display: inline-block;
+    cursor: pointer;
+    opacity: 0.7;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+    color: #aaa;
+}
+
+.admin-close::before,
+.admin-close::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 16px;
+    height: 2.5px;
+    background: currentColor;
+    transform-origin: center;
+}
+
+.admin-close::before {
+    transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.admin-close::after {
+    transform: translate(-50%, -50%) rotate(-45deg);
+}
+
+.admin-close:hover {
+    opacity: 1;
+    transform: scale(1.1);
+    color: #dcddde;
+}

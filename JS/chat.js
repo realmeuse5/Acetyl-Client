@@ -28,14 +28,6 @@ let messagesRef = null;
 let unsubscribe = null;
 let myChats = JSON.parse(localStorage.getItem("myChats") || "[]");
 let uid = null;
-
-function writeOptions() {
-    if (noAuthMode) {
-        return { auth: { uid } };
-    }
-    return {}; // Firebase Auth mode
-}
-
 let attachedFile = null;
 let fileInput;
 let attachBtn;
@@ -46,6 +38,17 @@ let createChatButton;
 let joinChatBtn;
 let adminPanelBtn;
 let adminPanel;
+let rows;
+let adminCloseBtn;
+let container;
+let emptyMsg;
+
+function writeOptions() {
+    if (noAuthMode) {
+        return { auth: { uid } };
+    }
+    return {}; // Firebase Auth mode
+}
 
 
 // ONLOAD
@@ -65,11 +68,11 @@ window.onload = async () => {
     attachedFileLabel = document.getElementById("attachedFileLabel");
     adminPanelBtn = document.getElementById("adminPanelBtn");
     adminPanel = document.getElementById("adminPanel");
-    const container = document.getElementById("activeUsers");
-    const emptyMsg = document.getElementById("noActiveUsersMsg");
-    const rows = document.querySelectorAll(".chatRow");
- 
-
+    adminCloseBtn = document.getElementById("adminCloseBtn");
+    rows = document.querySelectorAll(".chatRow");
+    container = document.getElementById("activeUsers");
+    emptyMsg = document.getElementById("noActiveUsersMsg");
+    
     await initAuthMode(); 
 
     if (noAuthMode) {
@@ -85,6 +88,15 @@ window.onload = async () => {
         // Firebase Auth Mode
         waitForAuthReady();
     }
+
+    adminPanelBtn.addEventListener("click", () => {
+        adminPanel.classList.remove("hidden");
+    });
+
+    adminCloseBtn.addEventListener("click", () => {
+        adminPanel.classList.add("hidden");
+    });
+
 };
 
 function waitForAuthReady() {
@@ -673,17 +685,4 @@ function setupNotificationListener(chatId) {
         maybeNotify(msg, chatId);
     });
 }
-
-
-// ADMIN PANEL (UI only for now)
-adminPanelBtn.addEventListener("click", () => {
-    adminPanel.classList.remove("hidden");
-});
-
-const adminClose = adminPanel.querySelector(".leaveChat");
-
-adminClose.addEventListener("click", () => {
-    adminPanel.classList.add("hidden");
-});
-
 
