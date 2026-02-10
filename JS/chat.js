@@ -44,10 +44,7 @@ let container;
 let emptyMsg;
 
 function writeOptions() {
-    if (noAuthMode) {
-        return { auth: { uid } };
-    }
-    return {}; // Firebase Auth mode
+    return { auth: { uid } };
 }
 
 
@@ -457,6 +454,7 @@ function addChatToSidebar(code, name) {
     row.appendChild(btn);
     row.appendChild(leave);
     myChatsContainer.appendChild(row);
+    rows = document.querySelectorAll(".chatRow");
 
     updateNoServersMessage();
 }
@@ -540,6 +538,25 @@ async function sendMessage() {
     fileInput.value = "";
     attachedFileLabel.textContent = "";
     attachedFileLabel.classList.add("hidden");
+}
+
+async function enforceMessageLimit() {
+    if (!messagesRef) return;
+
+    const snapshot = await get(messagesRef);
+    if (!snapshot.exists()) return;
+
+    const messages = snapshot.val();
+    const keys = Object.keys(messages);
+
+    if (keys.length > 50) {
+        const excess = keys.length - 50;
+        const toDelete = keys.slice(0, excess);
+
+        for (const key of toDelete) {
+            await remove(child(messagesRef, key), writeOptions());
+        }
+    }
 }
 
 
