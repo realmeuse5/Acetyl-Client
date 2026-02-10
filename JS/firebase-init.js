@@ -25,7 +25,7 @@ export const auth = getAuth(app);
 // --- Hybrid mode flag
 export let noAuthMode = false;
 
-// Detect if IndexedDB is blocked (restricted environment → no-auth mode)
+// Detect if IndexedDB is blocked
 async function isIndexedDBBlocked() {
     return new Promise(resolve => {
         let dbTest;
@@ -48,7 +48,7 @@ export async function initAuthMode() {
     noAuthMode = blocked;
 
     if (noAuthMode) {
-        console.warn("Running in NO-AUTH MODE (restricted device detected).");
+        console.warn("Running in NO-AUTH MODE.");
         return;
     }
 

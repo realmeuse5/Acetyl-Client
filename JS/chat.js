@@ -13,6 +13,7 @@ import {
     onDisconnect
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
+
 // GLOBAL STATE
 let messagesDiv;
 let input;
@@ -20,22 +21,12 @@ let usernameEl;
 let adminBtn;
 let myChatsContainer;
 let msg;
-
 let username = "Anonymous";
-let isAdmin = false;
-
-export let currentChat = "public";
-
-export function setCurrentChat(id) {
-    currentChat = id;
-}
-
+let isAdmin = false; 
+let currentChat = "public";
 let messagesRef = null;
 let unsubscribe = null;
-
 let myChats = JSON.parse(localStorage.getItem("myChats") || "[]");
-
-// Always use a UID
 let uid = null;
 
 function writeOptions() {
@@ -46,6 +37,15 @@ function writeOptions() {
 }
 
 let attachedFile = null;
+let fileInput;
+let attachBtn;
+let attachedFileLabel;
+let gear;
+let publicBtn;
+let createChatButton;
+let joinChatBtn;
+let adminPanelBtn;
+let adminPanel;
 
 
 // ONLOAD
@@ -56,9 +56,19 @@ window.onload = async () => {
     adminBtn = document.getElementById("adminLogin");
     myChatsContainer = document.getElementById("myChats");
     msg = document.getElementById("noServersMsg");
-    const fileInput = document.getElementById("fileInput");
-    const attachBtn = document.getElementById("attachBtn");
-    const attachedFileLabel = document.getElementById("attachedFileLabel");
+    fileInput = document.getElementById("fileInput");
+    attachBtn = document.getElementById("attachBtn");
+    gear = document.getElementById("gear");
+    publicBtn = document.getElementById("publicChatBtn");
+    createChatButton = document.getElementById("createChatBtn");
+    joinChatBtn = document.getElementById("joinChatBtn");
+    attachedFileLabel = document.getElementById("attachedFileLabel");
+    adminPanelBtn = document.getElementById("adminPanelBtn");
+    adminPanel = document.getElementById("adminPanel");
+    const container = document.getElementById("activeUsers");
+    const emptyMsg = document.getElementById("noActiveUsersMsg");
+    const rows = document.querySelectorAll(".chatRow");
+ 
 
     await initAuthMode(); 
 
@@ -183,18 +193,19 @@ async function validateSavedChats() {
 
 // UI EVENT LISTENERS
 function attachUIListeners() {
-    document.getElementById("gear").addEventListener("click", changeUsername);
-    document.getElementById("publicChatBtn").addEventListener("click", () => switchChat("public"));
-    document.getElementById("createChatBtn").addEventListener("click", createChat);
-    document.getElementById("joinChatBtn").addEventListener("click", joinChat);
-
-    adminBtn.addEventListener("click", () => {alert("Admin login is now managed by UID.\nAsk realmeuseDev to make you an admin.");});
+    gear.addEventListener("click", changeUsername);
+    publicBtn.addEventListener("click", () => switchChat("public"));
+    createChatButton.addEventListener("click", createChat);
+    joinChatBtn.addEventListener("click", joinChat);
+    adminBtn.addEventListener("click", () => {
+        alert("Admin login is now managed by UID.\nAsk realmeuseDev to make you an admin.");
+    });
 
     input.addEventListener("keydown", (e) => {
         if (e.key === "Enter") sendMessage();
     });
 
-    attachBtn.addEventListener("click", () => {fileInput.click();});
+    attachBtn.addEventListener("click", () => { fileInput.click(); });
 
     fileInput.addEventListener("change", () => {
         const file = fileInput.files[0];
@@ -223,7 +234,10 @@ async function changeUsername() {
     if (!name) return;
 
     const cleaned = name.trim();
-    if (!cleaned || cleaned.length > 24 || /[.#$\[\]]/.test(cleaned)) return;
+    if (!cleaned || cleaned.length > 24 || /[.#$\[\]]/.test(cleaned)) {
+        alert("Invalid username.");
+        return; 
+    }
 
     username = cleaned;
     usernameEl.textContent = username;
@@ -254,21 +268,21 @@ async function checkAdminStatus() {
     if (snap.exists()) {
         isAdmin = true;
         activateAdminUI();
-        document.getElementById("adminPanelBtn").style.display = "block";
+        adminPanelBtn.style.display = "block";
     } else {
         isAdmin = false;
         deactivateAdminUI();
-        document.getElementById("adminPanelBtn").style.display = "none";
+        adminPanelBtn.style.display = "none";
     }
 }
 
 function activateAdminUI() {
     usernameEl.innerHTML = `<span class="admin-badge">[ADMIN]</span><span class="admin-username">${username}</span>`;
-    document.getElementById("adminPanelBtn").style.display = "block";
+    adminPanelBtn.style.display = "block";
 }
 
 function deactivateAdminUI() {
-    document.getElementById("adminPanelBtn").style.display = "none";
+    adminPanelBtn.style.display = "none";
     usernameEl.textContent = username;
 }
 
@@ -289,7 +303,7 @@ async function switchChat(chatId) {
     const chatName = data.name || chatId;
 
     updatePlaceholder(chatName);
-    setCurrentChat(chatId);  
+    currentChat = chatId;  
     setupPresence(chatId);
 
     highlightActiveChat(chatId);
@@ -307,9 +321,6 @@ async function switchChat(chatId) {
 }
 
 function highlightActiveChat(chatId) {
-    const rows = document.querySelectorAll(".chatRow");
-    const publicBtn = document.getElementById("publicChatBtn");
-
     rows.forEach(row => {
         if (row.dataset.chat === chatId) {
             row.classList.add("active");
@@ -489,20 +500,12 @@ async function sendMessage() {
     if (text.length > 500) return;
     if (!noAuthMode && !uid) return;
 
-    const messagesRef = ref(db, `chats/${currentChat}/messages`);
-
     let fileUrl = null;
     let fileName = null;
     let fileType = null;
 
     if (file) {
-        if (!fileUrl) {
-            alert("File upload failed.");
-            return;
-        }
-
-        fileName = file.name;
-        fileType = file.type;
+        alert("File upload failed.");
     }
 
     const messageData = {
@@ -523,6 +526,8 @@ async function sendMessage() {
     input.value = "";
     attachedFile = null;
     fileInput.value = "";
+    attachedFileLabel.textContent = "";
+    attachedFileLabel.classList.add("hidden");
 }
 
 
@@ -606,9 +611,6 @@ function setupPresence(chatId) {
 }
 
 async function updateActiveUsersList() {
-    const container = document.getElementById("activeUsers");
-    const emptyMsg = document.getElementById("noActiveUsersMsg");
-
     if (!presenceRef) return;
 
     const snapshot = await get(presenceRef);
@@ -636,7 +638,7 @@ async function updateActiveUsersList() {
 }
 
 
-// NOTIFICATIONS
+// UTILITY
 function isNearBottom() {
     const threshold = 200;
     const distance = messagesDiv.scrollHeight - messagesDiv.scrollTop - messagesDiv.clientHeight;
@@ -674,12 +676,14 @@ function setupNotificationListener(chatId) {
 
 
 // ADMIN PANEL (UI only for now)
-document.getElementById("adminPanelBtn").addEventListener("click", () => {
-    document.getElementById("adminPanel").classList.remove("hidden");
+adminPanelBtn.addEventListener("click", () => {
+    adminPanel.classList.remove("hidden");
 });
 
-document.getElementsByClassName("leaveChat")[0].addEventListener("click", () => {
-    document.getElementById("adminPanel").classList.add("hidden");
+const adminClose = adminPanel.querySelector(".leaveChat");
+
+adminClose.addEventListener("click", () => {
+    adminPanel.classList.add("hidden");
 });
 
 
