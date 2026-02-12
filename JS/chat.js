@@ -586,6 +586,39 @@ async function sendMessage() {
     attachedFileLabel.classList.add("hidden");
 }
 
+async function enforceMessageLimit() {
+    if (!messagesRef) return;
+
+    const snapshot = await get(messagesRef);
+    if (!snapshot.exists()) return;
+
+    const messages = snapshot.val();
+    const keys = Object.keys(messages);
+
+    if (keys.length > 50) {
+        const excess = keys.length - 50;
+        const toDelete = keys.slice(0, excess);
+
+        for (const key of toDelete) {
+            const msgData = messages[key];
+
+            // If message had a file, delete it from the server
+            if (msgData.fileUrl) {
+                const filename = getFilenameFromUrl(msgData.fileUrl);
+
+                // Build delete endpoint
+                const deleteUrl = UPLOAD_URL.replace("/upload", "") + "/delete-file?name=" + filename;
+
+                fetch(deleteUrl, { method: "DELETE" })
+                    .catch(err => console.error("File delete failed:", err));
+            }
+
+            // Delete message from Firebase
+            await remove(child(messagesRef, key), writeOptions());
+        }
+    }
+}
+
 
 // MESSAGE DISPLAY
 function displayMessage(msg) {
@@ -655,6 +688,10 @@ function displayMessage(msg) {
     if (isNearBottom()) {
         messagesDiv.scrollTop = messagesDiv.scrollHeight;
     }
+}
+
+function getFilenameFromUrl(url) {
+    return url.split("/").pop();
 }
 
 
