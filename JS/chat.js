@@ -15,6 +15,8 @@ import {
 
 
 // GLOBAL STATE
+const UPLOAD_URL = "https://diego-trainer-enough-characters.trycloudflare.com/upload";
+
 let messagesDiv;
 let input;
 let usernameEl;
@@ -519,6 +521,24 @@ function updateNoServersMessage() {
 
 
 // MESSAGE SENDING
+async function uploadFile(file) {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const res = await fetch(UPLOAD_URL, {
+        method: "POST",
+        body: formData
+    });
+
+    if (!res.ok) throw new Error("Upload failed");
+
+    const data = await res.json(); 
+    // data.url = "/uploads/filename"
+
+    const base = UPLOAD_URL.replace("/upload", "");
+    return base + data.url; // full public URL
+}
+
 async function sendMessage() {
     const text = input.value.trim();
     const file = attachedFile;
@@ -531,8 +551,17 @@ async function sendMessage() {
     let fileName = null;
     let fileType = null;
 
+    // If a file is attached, upload it first
     if (file) {
-        alert("File upload failed.");
+        try {
+            fileUrl = await uploadFile(file);
+            fileName = file.name;
+            fileType = file.type;
+        } catch (err) {
+            console.error(err);
+            alert("File upload failed.");
+            return;
+        }
     }
 
     const messageData = {
@@ -547,33 +576,14 @@ async function sendMessage() {
     };
 
     await push(messagesRef, messageData, writeOptions());
-
     enforceMessageLimit();
 
+    // Reset UI
     input.value = "";
     attachedFile = null;
     fileInput.value = "";
     attachedFileLabel.textContent = "";
     attachedFileLabel.classList.add("hidden");
-}
-
-async function enforceMessageLimit() {
-    if (!messagesRef) return;
-
-    const snapshot = await get(messagesRef);
-    if (!snapshot.exists()) return;
-
-    const messages = snapshot.val();
-    const keys = Object.keys(messages);
-
-    if (keys.length > 50) {
-        const excess = keys.length - 50;
-        const toDelete = keys.slice(0, excess);
-
-        for (const key of toDelete) {
-            await remove(child(messagesRef, key), writeOptions());
-        }
-    }
 }
 
 
@@ -614,6 +624,30 @@ function displayMessage(msg) {
         text.classList.add("text");
         text.textContent = msg.text;
         wrapper.appendChild(text);
+    }
+
+    // FILE CONTENT (NEW)
+    if (msg.fileUrl) {
+        const fileWrapper = document.createElement("div");
+        fileWrapper.classList.add("file-message");
+
+        // If it's an image, show it inline
+        if (msg.fileType && msg.fileType.startsWith("image/")) {
+            const img = document.createElement("img");
+            img.src = msg.fileUrl;
+            img.classList.add("chat-image");
+            fileWrapper.appendChild(img);
+        } 
+        // Otherwise show a download link
+        else {
+            const link = document.createElement("a");
+            link.href = msg.fileUrl;
+            link.target = "_blank";
+            link.textContent = msg.fileName || "Download file";
+            fileWrapper.appendChild(link);
+        }
+
+        wrapper.appendChild(fileWrapper);
     }
 
     messagesDiv.appendChild(wrapper);
@@ -719,4 +753,3 @@ function setupNotificationListener(chatId) {
         maybeNotify(msg, chatId);
     });
 }
-
