@@ -280,6 +280,14 @@ body {
     margin-left: 10px;
 }
 
+.chat-image {
+    max-width: 250px; 
+    max-height: 250px;  
+    border-radius: 6px;
+    margin-top: 6px;
+    object-fit: contain; 
+}
+
 .publicButton {
     background-color: #121214;
     border: none;
