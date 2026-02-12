@@ -15,7 +15,7 @@ import {
 
 
 // GLOBAL STATE
-const UPLOAD_URL = "https://ambien-television-tex-euros.trycloudflare.com/upload";
+const UPLOAD_URL = "https://acetyl-file-server.onrender.com/upload";
 
 let messagesDiv;
 let input;
