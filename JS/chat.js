@@ -15,7 +15,7 @@ import {
 
 
 // GLOBAL STATE
-const UPLOAD_URL = "https://dayton-ottawa-southern-glory.trycloudflare.com/uploads";
+const UPLOAD_URL = "https://dayton-ottawa-southern-glory.trycloudflare.com/upload";
 
 let messagesDiv;
 let input;
