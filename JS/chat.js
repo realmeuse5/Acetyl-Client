@@ -15,7 +15,7 @@ import {
 
 
 // GLOBAL STATE
-const UPLOAD_URL = "https://dayton-ottawa-southern-glory.trycloudflare.com/upload";
+const UPLOAD_URL = "https://jeff-johnson-endorsed-hearings.trycloudflare.com/upload";
 
 let messagesDiv;
 let input;
