@@ -15,7 +15,7 @@ import {
 
 
 // GLOBAL STATE
-const UPLOAD_URL = "https://diego-trainer-enough-characters.trycloudflare.com/upload";
+const UPLOAD_URL = "https://dayton-ottawa-southern-glory.trycloudflare.com/uploads";
 
 let messagesDiv;
 let input;
