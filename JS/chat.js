@@ -248,6 +248,23 @@ async function changeUsername() {
         return; 
     }
 
+    if (cleaned === username) {
+        return; // no change needed
+    }
+
+    // Check if username is already taken
+    const usersSnap = await get(ref(db, "users"));
+    if (usersSnap.exists()) {
+        const users = usersSnap.val();
+
+        for (const uidKey in users) {
+            if (users[uidKey].username === cleaned) {
+                alert("Username already taken.");
+                return;
+            }
+        }
+    }
+
     username = cleaned;
     usernameEl.textContent = username;
     localStorage.setItem("username", username);
