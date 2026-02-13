@@ -659,26 +659,54 @@ function displayMessage(msg) {
         wrapper.appendChild(text);
     }
 
-    // FILE CONTENT (NEW)
+    // File content
     if (msg.fileUrl) {
         const fileWrapper = document.createElement("div");
         fileWrapper.classList.add("file-message");
 
-        // If it's an image, show it inline
+        // Image
         if (msg.fileType && msg.fileType.startsWith("image/")) {
             const img = document.createElement("img");
             img.src = msg.fileUrl;
             img.classList.add("chat-image");
+
+            // Image fails
+            img.onerror = () => {
+                img.remove(); 
+
+                const placeholder = document.createElement("div");
+                placeholder.className = "image-placeholder";
+                placeholder.textContent = "Image failed to load :(";
+
+                fileWrapper.appendChild(placeholder);
+            };
+
             fileWrapper.appendChild(img);
         } 
-        // Otherwise show a download link
+        // Otherwise display file icon + name
         else {
-            const link = document.createElement("a");
-            link.href = msg.fileUrl;
-            link.target = "_blank";
-            link.textContent = msg.fileName || "Download file";
-            fileWrapper.appendChild(link);
+            const fileBox = document.createElement("div");
+            fileBox.classList.add("file-box");
+
+            const icon = document.createElement("div");
+            icon.classList.add("file-icon");
+            icon.textContent = "📄";
+
+            const filename = document.createElement("span");
+            filename.classList.add("file-name");
+            filename.textContent = msg.fileName || "Download file";
+
+            fileBox.appendChild(icon);
+            fileBox.appendChild(filename);
+
+            // Make the whole box clickable
+            fileBox.onclick = () => {
+                window.open(msg.fileUrl, "_blank");
+            };
+
+            fileWrapper.appendChild(fileBox);
         }
+
 
         wrapper.appendChild(fileWrapper);
     }
