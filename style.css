@@ -54,6 +54,14 @@ body {
 }
 
 /* MAIN CONTENT */
+#bye {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 95vh;
+    color: #777;
+    font-size: 2rem;
+}
 
 #web-container {
     display: flex;
