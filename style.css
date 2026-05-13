@@ -55,7 +55,7 @@ body {
 
 /* MAIN CONTENT */
 #bye {
-    display: flex;
+    display: none;
     align-items: center;
     justify-content: center;
     height: 95vh;
