@@ -45,8 +45,6 @@ let adminCloseBtn;
 let container;
 let emptyMsg;
 let banBtn;
-let banScreen;
-let banCountdown
 
 function writeOptions() {
     return { auth: { uid } };
@@ -55,6 +53,7 @@ function writeOptions() {
 
 // ONLOAD
 window.onload = async () => {
+    // DOM refs
     messagesDiv = document.getElementById("messages");
     input = document.getElementById("messageInput");
     usernameEl = document.getElementById("username");
@@ -75,83 +74,28 @@ window.onload = async () => {
     container = document.getElementById("activeUsers");
     emptyMsg = document.getElementById("noActiveUsersMsg");
     banBtn = document.getElementById("banBtn");
-    banScreen = document.getElementById("banScreen")
-    banCountdown = document.getElementById("banCountdown")
-    
-    await initAuthMode(); 
+
+    await initAuthMode();
 
     if (noAuthMode) {
-        // No-Auth Mode: generate or reuse our own UID
         uid = localStorage.getItem("fakeUid");
         if (!uid) {
             uid = crypto.randomUUID();
             localStorage.setItem("fakeUid", uid);
         }
-        console.log("NO-AUTH MODE UID:", uid);
+
         await finishAppLoad();
-    } else {
-        // Firebase Auth Mode
-        waitForAuthReady();
+        return;
     }
 
-    adminPanelBtn.addEventListener("click", () => {
-        adminPanel.classList.remove("hidden");
+    // Firebase Auth Mode
+    auth.onAuthStateChanged(async (user) => {
+        if (!user) return;
+
+        uid = user.uid;
+
+        await finishAppLoad();
     });
-
-    adminCloseBtn.addEventListener("click", () => {
-        adminPanel.classList.add("hidden");
-    });
-
-    banBtn.addEventListener("click", async () => {
-        const targetUsername = prompt("Enter the username of the user you want to ban:");
-        if (!targetUsername) return ;
-
-        // Find UID by username
-        const usersSnap = await get(ref(db, "users"));
-
-        let targetUid = null;
-
-        usersSnap.forEach(child => {
-            const data = child.val();
-            if (data.username && data.username.toLowerCase() === targetUsername.toLowerCase()) {
-                targetUid = child.key;
-            }
-        });
-
-        if (!targetUid) { return alert("No user found with that username."); }
-
-        const adminSnap = await get(ref(db, "admins/" + targetUid));
-        if (adminSnap.exists()) {
-            return alert("You cannot ban another admin.");
-        }
-
-        // Ask for duration
-        const durationInput = prompt("Duration of ban in hours:");
-        if (!durationInput || isNaN(durationInput)) { return alert("Invalid duration."); }
-
-        const hours = Number(durationInput);
-
-        if (hours < 1 || hours > 999) { return alert("Ban duration must be between 1 and 999 hours."); }
-
-        const reason = prompt("Reason for ban:");
-        if (!reason) return ;
-
-        const durationSeconds = hours * 3600;
-        const timestamp = Date.now();
-        const adminUid = auth.currentUser.uid;
-
-        // Write ban to Firebase
-        await set(ref(db, "bans/" + targetUid), {
-            bannedBy: adminUid,
-            reason: reason,
-            duration: durationSeconds,
-            timestamp: timestamp,
-            username: targetUsername
-        });
-
-        alert(`User "${targetUsername}" has been banned for ${hours} hour(s).`);
-
-        })
 };
 
 function waitForAuthReady() {
@@ -169,9 +113,6 @@ function waitForAuthReady() {
 }
 
 async function finishAppLoad() {
-    const banned = await checkBanStatus(uid);
-    if (banned) return;
-
     await loadSavedUser(uid);
     await loadSavedChats();
     await validateSavedChats();
@@ -185,7 +126,6 @@ async function finishAppLoad() {
         Notification.requestPermission();
     }
 }
-
 
 // LOAD USER + CHATS 
 async function loadSavedUser(currentUid) {
@@ -271,55 +211,6 @@ async function validateSavedChats() {
     myChatsContainer.innerHTML = "";
     myChats.forEach(chat => addChatToSidebar(chat.code, chat.name));
     updateNoServersMessage();
-}
-
-async function checkBanStatus(uid) {
-    const banRef = ref(db, "bans/" + uid);
-    const snap = await get(banRef);
-
-    if (!snap.exists()) return false;
-
-    const ban = snap.val();
-    const now = Date.now();
-    const expiresAt = ban.timestamp + ban.duration * 1000;
-
-    if (now >= expiresAt) {
-        // Ban expired
-        await remove(banRef);
-        return false;
-    }
-
-    // Still banned
-    showBanScreen(expiresAt);
-    return true;
-}
-
-function showBanScreen(expiresAt) {
-    // Hide all app UI
-    document.getElementById("web-container").style.display = "none";
-    adminPanel.classList.add("hidden");
-
-    banScreen.classList.remove("hidden");
-
-    function updateCountdown() {
-        const now = Date.now();
-        const diff = expiresAt - now;
-
-        if (diff <= 0) {
-            location.reload();
-            return;
-        }
-
-        const hours = Math.floor(diff / 3600000);
-        const minutes = Math.floor((diff % 3600000) / 60000);
-        const seconds = Math.floor((diff % 60000) / 1000);
-
-        banCountdown.textContent =
-            `Time remaining: ${hours}h ${minutes}m ${seconds}s`;
-    }
-
-    updateCountdown();
-    setInterval(updateCountdown, 1000);
 }
 
 // UI EVENT LISTENERS
