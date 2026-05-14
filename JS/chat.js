@@ -247,6 +247,14 @@ function attachUIListeners() {
         attachedFileLabel.textContent = `Attached: ${file.name}`;
         attachedFileLabel.classList.remove("hidden");
     });
+
+    adminPanelBtn.addEventListener("click", () => {
+        adminPanel.classList.remove("hidden");
+    });
+
+    adminCloseBtn.addEventListener("click", () => {
+        adminPanel.classList.add("hidden");
+    });
 }
 
 
