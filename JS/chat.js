@@ -44,6 +44,7 @@ let rows;
 let adminCloseBtn;
 let container;
 let emptyMsg;
+let banBtn;
 
 function writeOptions() {
     return { auth: { uid } };
@@ -71,6 +72,7 @@ window.onload = async () => {
     rows = document.querySelectorAll(".chatRow");
     container = document.getElementById("activeUsers");
     emptyMsg = document.getElementById("noActiveUsersMsg");
+    banBtn = document.getElementById("banBtn");
     
     await initAuthMode(); 
 
@@ -96,6 +98,56 @@ window.onload = async () => {
         adminPanel.classList.add("hidden");
     });
 
+    banBtn.addEventListener("click", async () => {
+        const targetUsername = prompt("Enter the username of the user you want to ban:");
+        if (!targetUsername) return ;
+
+        // Find UID by username
+        const usersSnap = await get(ref(db, "users"));
+
+        let targetUid = null;
+
+        usersSnap.forEach(child => {
+            const data = child.val();
+            if (data.username && data.username.toLowerCase() === targetUsername.toLowerCase()) {
+                targetUid = child.key;
+            }
+        });
+
+        if (!targetUid) { return alert("No user found with that username."); }
+
+        const adminSnap = await get(ref(db, "admins/" + targetUid));
+        if (adminSnap.exists()) {
+            return alert("You cannot ban another admin.");
+        }
+
+        // Ask for duration
+        const durationInput = prompt("Duration of ban in hours:");
+        if (!durationInput || isNaN(durationInput)) { return alert("Invalid duration."); }
+
+        const hours = Number(durationInput);
+
+        if (hours < 1 || hours > 999) { return alert("Ban duration must be between 1 and 999 hours."); }
+
+        const reason = prompt("Reason for ban:");
+        if (!reason) return ;
+
+        const durationSeconds = hours * 3600;
+        const timestamp = Date.now();
+        const adminUid = auth.currentUser.uid;
+
+        // Write ban to Firebase
+        await set(ref(db, "bans/" + targetUid), {
+            bannedBy: adminUid,
+            reason: reason,
+            duration: durationSeconds,
+            timestamp: timestamp,
+            username: targetUsername
+        });
+
+        alert(`User "${targetUsername}" has been banned for ${hours} hour(s).`);
+
+        })
 };
 
 function waitForAuthReady() {
