@@ -45,6 +45,8 @@ let adminCloseBtn;
 let container;
 let emptyMsg;
 let banBtn;
+let banScreen;
+let banCountdown
 
 function writeOptions() {
     return { auth: { uid } };
@@ -73,6 +75,8 @@ window.onload = async () => {
     container = document.getElementById("activeUsers");
     emptyMsg = document.getElementById("noActiveUsersMsg");
     banBtn = document.getElementById("banBtn");
+    banScreen = document.getElementById("banScreen")
+    banCountdown = document.getElementById("banCountdown")
     
     await initAuthMode(); 
 
@@ -165,6 +169,9 @@ function waitForAuthReady() {
 }
 
 async function finishAppLoad() {
+    const banned = await checkBanStatus(uid)
+    if (banned) return
+
     await loadSavedUser(uid);
     await loadSavedChats();
     await validateSavedChats();
@@ -266,6 +273,52 @@ async function validateSavedChats() {
     updateNoServersMessage();
 }
 
+async function checkBanStatus(uid) {
+    const banRef = ref(db, "bans/" + uid);
+    const snap = await get(banRef);
+
+    if (!snap.exists()) return false;
+
+    const ban = snap.val();
+    const now = Date.now();
+    const expiresAt = ban.timestamp + ban.duration * 1000;
+
+    if (now >= expiresAt) {
+        // Ban expired
+        await remove(banRef);
+        return false;
+    }
+
+    // Still banned
+    showBanScreen(expiresAt);
+    return true;
+}
+
+function showBanScreen(expiresAt) {
+    document.getElementById("web-container").style.display = "none";
+
+    banScreen.classList.remove("hidden");
+
+    function updateCountdown() {
+        const now = Date.now();
+        const diff = expiresAt - now;
+
+        if (diff <= 0) {
+            location.reload();
+            return;
+        }
+
+        const hours = Math.floor(diff / 3600000);
+        const minutes = Math.floor((diff % 3600000) / 60000);
+        const seconds = Math.floor((diff % 60000) / 1000);
+
+        banCountdown.textContent =
+            `Time remaining: ${hours}h ${minutes}m ${seconds}s`;
+    }
+
+    updateCountdown();
+    setInterval(updateCountdown, 1000);
+}
 
 // UI EVENT LISTENERS
 function attachUIListeners() {
