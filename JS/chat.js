@@ -169,8 +169,8 @@ function waitForAuthReady() {
 }
 
 async function finishAppLoad() {
-    const banned = await checkBanStatus(uid)
-    if (banned) return
+    const banned = await checkBanStatus(uid);
+    if (banned) return;
 
     await loadSavedUser(uid);
     await loadSavedChats();
@@ -295,7 +295,9 @@ async function checkBanStatus(uid) {
 }
 
 function showBanScreen(expiresAt) {
+    // Hide all app UI
     document.getElementById("web-container").style.display = "none";
+    adminPanel.classList.add("hidden");
 
     banScreen.classList.remove("hidden");
 
