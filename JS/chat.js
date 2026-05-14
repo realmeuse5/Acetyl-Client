@@ -184,23 +184,36 @@ async function finishAppLoad() {
 async function loadSavedUser(currentUid) {
     const savedName = localStorage.getItem("username");
 
+    // If username exists locally use it
     if (savedName) {
         username = savedName;
         usernameEl.textContent = username;
+
         await set(ref(db, `users/${currentUid}/username`), username, writeOptions());
-    } else {
-        const userRef = ref(db, `users/${currentUid}/username`);
-        const snap = await get(userRef);
-        if (snap.exists()) {
-            username = snap.val();
-            usernameEl.textContent = username;
-            localStorage.setItem("username", username);
-        } else {
-            username = "Anonymous";
-            usernameEl.textContent = username;
-            await set(userRef, username, writeOptions());
-        }
+        return;
     }
+
+    // Otherwise check Firebase
+    const userRef = ref(db, `users/${currentUid}/username`);
+    const snap = await get(userRef);
+
+    if (snap.exists()) {
+        username = snap.val();
+        usernameEl.textContent = username;
+        localStorage.setItem("username", username);
+        return;
+    }
+
+    // Generate random username
+    const num = Math.floor(1000 + Math.random() * 9000); 
+    const newName = "user" + num;
+
+    username = newName;
+    usernameEl.textContent = username;
+
+    // Save to Firebase + localStorage
+    await set(userRef, username, writeOptions());
+    localStorage.setItem("username", username);
 }
 
 async function loadSavedChats() {
