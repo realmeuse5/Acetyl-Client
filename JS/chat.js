@@ -53,7 +53,6 @@ function writeOptions() {
 
 // ONLOAD
 window.onload = async () => {
-    // DOM refs
     messagesDiv = document.getElementById("messages");
     input = document.getElementById("messageInput");
     usernameEl = document.getElementById("username");
@@ -127,11 +126,11 @@ async function finishAppLoad() {
     }
 }
 
+
 // LOAD USER + CHATS 
 async function loadSavedUser(currentUid) {
     const savedName = localStorage.getItem("username");
 
-    // If username exists locally use it
     if (savedName) {
         username = savedName;
         usernameEl.textContent = username;
@@ -140,7 +139,6 @@ async function loadSavedUser(currentUid) {
         return;
     }
 
-    // Otherwise check Firebase
     const userRef = ref(db, `users/${currentUid}/username`);
     const snap = await get(userRef);
 
@@ -158,7 +156,6 @@ async function loadSavedUser(currentUid) {
     username = newName;
     usernameEl.textContent = username;
 
-    // Save to Firebase + localStorage
     await set(userRef, username, writeOptions());
     localStorage.setItem("username", username);
 }
@@ -213,6 +210,7 @@ async function validateSavedChats() {
     updateNoServersMessage();
 }
 
+
 // UI EVENT LISTENERS
 function attachUIListeners() {
     gear.addEventListener("click", changeUsername);
@@ -254,6 +252,50 @@ function attachUIListeners() {
 
     adminCloseBtn.addEventListener("click", () => {
         adminPanel.classList.add("hidden");
+    });
+
+    banBtn.addEventListener("click", async () => {
+        const targetUsername = prompt("Enter username to ban:");
+        if (!targetUsername) return;
+
+        const durationHours = prompt("Ban duration (hours):");
+        if (!durationHours) return;
+
+        const reason = prompt("Reason for ban:");
+        if (!reason) return;
+
+        const usersSnap = await get(ref(db, "users"));
+
+        const users = usersSnap.val();
+        let targetUid = null;
+
+        for (const uidKey in users) {
+            if (users[uidKey].username === targetUsername) {
+                targetUid = uidKey;
+                break;
+            }
+        }
+
+        if (!targetUid) {
+            alert("User not found.");
+            return;
+        }
+
+        const adminSnap = await get(ref(db, `admins/${targetUid}`));
+        if (adminSnap.exists()) {
+            alert("You cannot ban another admin.");
+            return;
+        }
+
+        await set(ref(db, `bans/${targetUid}`), {
+            username: targetUsername,
+            reason: reason,
+            duration: Number(durationHours) * 3600,
+            timestamp: Date.now(),
+            bannedBy: uid
+        });
+
+        alert(`User ${targetUsername} has been banned.`);
     });
 }
 
