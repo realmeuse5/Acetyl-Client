@@ -23,7 +23,7 @@ let usernameEl;
 let adminBtn;
 let myChatsContainer;
 let msg;
-let username = "Anonymous";
+let username = "";
 let isAdmin = false; 
 let currentChat = "public";
 let messagesRef = null;
@@ -38,13 +38,9 @@ let gear;
 let publicBtn;
 let createChatButton;
 let joinChatBtn;
-let adminPanelBtn;
-let adminPanel;
 let rows;
-let adminCloseBtn;
 let container;
 let emptyMsg;
-let banBtn;
 
 function writeOptions() {
     return { auth: { uid } };
@@ -56,7 +52,7 @@ window.onload = async () => {
     messagesDiv = document.getElementById("messages");
     input = document.getElementById("messageInput");
     usernameEl = document.getElementById("username");
-    adminBtn = document.getElementById("adminLogin");
+    adminBtn = document.getElementById("adminBtn");
     myChatsContainer = document.getElementById("myChats");
     msg = document.getElementById("noServersMsg");
     fileInput = document.getElementById("fileInput");
@@ -66,13 +62,9 @@ window.onload = async () => {
     createChatButton = document.getElementById("createChatBtn");
     joinChatBtn = document.getElementById("joinChatBtn");
     attachedFileLabel = document.getElementById("attachedFileLabel");
-    adminPanelBtn = document.getElementById("adminPanelBtn");
-    adminPanel = document.getElementById("adminPanel");
-    adminCloseBtn = document.getElementById("adminCloseBtn");
     rows = document.querySelectorAll(".chatRow");
     container = document.getElementById("activeUsers");
     emptyMsg = document.getElementById("noActiveUsersMsg");
-    banBtn = document.getElementById("banBtn");
 
     await initAuthMode();
 
@@ -96,20 +88,6 @@ window.onload = async () => {
         await finishAppLoad();
     });
 };
-
-function waitForAuthReady() {
-    const unsub = auth.onAuthStateChanged(async (user) => {
-        if (!user) {
-            return;
-        }
-
-        uid = user.uid;
-        console.log("Auth ready, UID:", uid);
-
-        unsub();
-        await finishAppLoad();
-    });
-}
 
 async function finishAppLoad() {
     await loadSavedUser(uid);
@@ -217,16 +195,58 @@ function attachUIListeners() {
     publicBtn.addEventListener("click", () => switchChat("public"));
     createChatButton.addEventListener("click", createChat);
     joinChatBtn.addEventListener("click", joinChat);
-    adminBtn.addEventListener("click", () => {
-        alert("Admin login is now managed by UID.\nAsk realmeuseDev to make you an admin.");
-    });
+    adminBtn.addEventListener("click", async () => {
+        const command = prompt("Enter admin / command:")
+        if (!command) return
 
+        switch (command.toLowerCase()) {
+            case "/ban":
+                const targetUsername = prompt("Enter username to ban:")
+                if (!targetUsername) return
+                const durationHours = prompt("Ban duration hours:")
+                if (!durationHours) return
+                const reason = prompt("Reason for ban:")
+                if (!reason) return
+                const users = await get(ref(db, "users")).val();
+                let targetUID = null
+
+                for (const uidKey in users) {
+                    if (users[uidKey].username === targetUsername) {
+                        targetUID = uidKey
+                        break
+                    }
+                }
+
+                if (!targetUID) {
+                    alert("User not found")
+                    return
+                }
+
+                const adminSnap = await get(ref(db, `admins/${targetUid}`));
+                if (adminSnap.exists()) {
+                    alert("You cannot ban another admin.");
+                    return;
+                }
+
+                await set(ref(db, `bans/${targetUid}`), {
+                    username: targetUsername,
+                    reason: reason,
+                    duration: Number(durationHours) * 3600,
+                    timestamp: Date.now(),
+                    bannedBy: uid
+                });
+
+                alert(`User ${targetUsername} has been banned.`);
+                break;
+
+            default:
+                alert("Invalid command")
+        }
+    });
     input.addEventListener("keydown", (e) => {
         if (e.key === "Enter") sendMessage();
     });
-
     attachBtn.addEventListener("click", () => { fileInput.click(); });
-
     fileInput.addEventListener("change", () => {
         const file = fileInput.files[0];
         if (!file) return;
@@ -244,58 +264,6 @@ function attachUIListeners() {
         attachedFile = file;
         attachedFileLabel.textContent = `Attached: ${file.name}`;
         attachedFileLabel.classList.remove("hidden");
-    });
-
-    adminPanelBtn.addEventListener("click", () => {
-        adminPanel.classList.remove("hidden");
-    });
-
-    adminCloseBtn.addEventListener("click", () => {
-        adminPanel.classList.add("hidden");
-    });
-
-    banBtn.addEventListener("click", async () => {
-        const targetUsername = prompt("Enter username to ban:");
-        if (!targetUsername) return;
-
-        const durationHours = prompt("Ban duration (hours):");
-        if (!durationHours) return;
-
-        const reason = prompt("Reason for ban:");
-        if (!reason) return;
-
-        const usersSnap = await get(ref(db, "users"));
-
-        const users = usersSnap.val();
-        let targetUid = null;
-
-        for (const uidKey in users) {
-            if (users[uidKey].username === targetUsername) {
-                targetUid = uidKey;
-                break;
-            }
-        }
-
-        if (!targetUid) {
-            alert("User not found.");
-            return;
-        }
-
-        const adminSnap = await get(ref(db, `admins/${targetUid}`));
-        if (adminSnap.exists()) {
-            alert("You cannot ban another admin.");
-            return;
-        }
-
-        await set(ref(db, `bans/${targetUid}`), {
-            username: targetUsername,
-            reason: reason,
-            duration: Number(durationHours) * 3600,
-            timestamp: Date.now(),
-            bannedBy: uid
-        });
-
-        alert(`User ${targetUsername} has been banned.`);
     });
 }
 
@@ -356,23 +324,11 @@ async function checkAdminStatus() {
 
     if (snap.exists()) {
         isAdmin = true;
-        activateAdminUI();
-        adminPanelBtn.style.display = "block";
+        adminBtn.style.display = "block";
     } else {
         isAdmin = false;
-        deactivateAdminUI();
-        adminPanelBtn.style.display = "none";
+        adminBtn.style.display = "none";
     }
-}
-
-function activateAdminUI() {
-    usernameEl.innerHTML = `<span class="admin-badge">[ADMIN]</span><span class="admin-username">${username}</span>`;
-    adminPanelBtn.style.display = "block";
-}
-
-function deactivateAdminUI() {
-    adminPanelBtn.style.display = "none";
-    usernameEl.textContent = username;
 }
 
 
@@ -665,7 +621,7 @@ async function enforceMessageLimit() {
 
             // If message had a file, delete it from the server
             if (msgData.fileUrl) {
-                const filename = getFilenameFromUrl(msgData.fileUrl);
+                const filename = msgData.fileUrl.split("/").pop();
 
                 // Build delete endpoint
                 const deleteUrl = UPLOAD_URL.replace("/upload", "") + "/delete-file?name=" + filename;
@@ -698,7 +654,7 @@ function displayMessage(msg) {
     } else if (msg.isAdmin) {
         name.innerHTML = `<span class="admin-badge">[ADMIN]</span><span class="admin-username">${msg.username}</span>`;
     } else {
-        name.textContent = msg.username || "Anonymous";
+        name.textContent = msg.username;
     }
 
     const time = document.createElement("span");
@@ -774,13 +730,7 @@ function displayMessage(msg) {
 
     messagesDiv.appendChild(wrapper);
 
-    if (isNearBottom()) {
-        messagesDiv.scrollTop = messagesDiv.scrollHeight;
-    }
-}
-
-function getFilenameFromUrl(url) {
-    return url.split("/").pop();
+    if (isNearBottom()) { messagesDiv.scrollTop = messagesDiv.scrollHeight; }
 }
 
 
