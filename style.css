@@ -57,8 +57,7 @@ body {
 
 #banned {
     display: none;
-    align-items: center;
-    justify-content: center;
+    text-align: center;
     height: 95vh;
     color: #777;
     font-size: 2rem;
