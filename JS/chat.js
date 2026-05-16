@@ -340,36 +340,40 @@ async function checkAdminStatus() {
 
 // BAN STATUS
 async function checkBanStatus(uid) {
-    const banSnap = await get(ref(db, `bans/${uid}`))
-    
-    if (banSnap.exists()) {
-        const banData = banSnap.val();
+    const banRef = ref(db, `bans/${uid}`);
 
-        let message = "You have been banned.";
-        if (banData.duration && banData.timestamp) {
-            const banEnd = banData.timestamp + banData.duration * 1000; // duration is in seconds
-            const now = Date.now();
-            const remainingMs = banEnd - now;
+    onValue(banRef, (banSnap) => {
+        if (banSnap.exists()) {
+            const banData = banSnap.val();
 
-            if (remainingMs > 0) {
-                const remainingMinutes = Math.floor(remainingMs / 60000);
-                message = `You have been banned. Reason: ${banData.reason || "unspecified"}<br>Remaining time: ${remainingMinutes} minutes`;
+            if (banData.duration && banData.timestamp) {
+                const banEnd = banData.timestamp + banData.duration * 1000; // duration in seconds
+                const now = Date.now();
+                const remainingMs = banEnd - now;
+
+                if (remainingMs > 0) {
+                    const remainingMinutes = Math.floor(remainingMs / 60000);
+                    banMsg.innerHTML = `You have been banned.<br>Reason: ${banData.reason || "unspecified"}<br>Remaining time: ${remainingMinutes} minutes`;
+                    webContainer.style.display = "none";
+                    banMsg.style.display = "block";
+                } else {
+                    // Ban expired
+                    remove(banRef);
+                    webContainer.style.display = "block";
+                    banMsg.style.display = "none";
+                }
             } else {
-                message = `You have been banned. Reason: ${banData.reason || "unspecified"}<br>Ban expired.`;
+                // Permanent ban
+                banMsg.innerHTML = `You have been banned.<br>Reason: ${banData.reason || "unspecified"}`;
+                webContainer.style.display = "none";
+                banMsg.style.display = "block";
             }
-        } else if (banData.reason) {
-            message = `You have been banned. Reason: ${banData.reason}`;
+        } else {
+            // Not banned
+            webContainer.style.display = "block";
+            banMsg.style.display = "none";
         }
-
-        // Hide chat UI, show ban message
-        webContainer.style.display = "none";
-        banMsg.style.display = "flex";
-        banMsg.innerHTML = message;
-    } else {
-        // Not banned
-        webContainer.style.display = "flex";
-        banMsg.style.display = "none";
-    }
+    });
 }
 
 
