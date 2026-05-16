@@ -363,7 +363,7 @@ async function checkBanStatus(uid) {
 
         // Hide chat UI, show ban message
         webContainer.style.display = "none";
-        banMsg.style.display = "block";
+        banMsg.style.display = "flex";
         banMsg.textContent = message;
     } else {
         // Not banned
