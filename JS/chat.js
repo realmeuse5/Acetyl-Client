@@ -224,13 +224,13 @@ function attachUIListeners() {
                     return
                 }
 
-                const adminSnap = await get(ref(db, `admins/${targetUid}`));
+                const adminSnap = await get(ref(db, `admins/${targetUID}`));
                 if (adminSnap.exists()) {
                     alert("You cannot ban another admin.");
                     return;
                 }
 
-                await set(ref(db, `bans/${targetUid}`), {
+                await set(ref(db, `bans/${targetUID}`), {
                     username: targetUsername,
                     reason: reason,
                     duration: Number(durationHours) * 3600,
