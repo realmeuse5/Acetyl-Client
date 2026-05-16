@@ -41,6 +41,8 @@ let joinChatBtn;
 let rows;
 let container;
 let emptyMsg;
+let banMsg;
+let webContainer;
 
 function writeOptions() {
     return { auth: { uid } };
@@ -65,6 +67,8 @@ window.onload = async () => {
     rows = document.querySelectorAll(".chatRow");
     container = document.getElementById("activeUsers");
     emptyMsg = document.getElementById("noActiveUsersMsg");
+    banMsg = document.getElementById("banned")
+    webContainer = document.getElementById("web-container")
 
     await initAuthMode();
 
@@ -84,7 +88,7 @@ window.onload = async () => {
         if (!user) return;
 
         uid = user.uid;
-
+        await checkBanStatus(uid)
         await finishAppLoad();
     });
 };
@@ -330,6 +334,41 @@ async function checkAdminStatus() {
     } else {
         isAdmin = false;
         adminBtn.style.display = "none";
+    }
+}
+
+
+// BAN STATUS
+async function checkBanStatus(uid) {
+    const banSnap = await get(ref(db, `bans/${uid}`))
+    
+    if (banSnap.exists()) {
+        const banData = banSnap.val();
+
+        let message = "You have been banned.";
+        if (banData.duration && banData.timestamp) {
+            const banEnd = banData.timestamp + banData.duration * 1000; // duration is in seconds
+            const now = Date.now();
+            const remainingMs = banEnd - now;
+
+            if (remainingMs > 0) {
+                const remainingMinutes = Math.floor(remainingMs / 60000);
+                message = `You have been banned. Reason: ${banData.reason || "unspecified"}\nRemaining time: ${remainingMinutes} minutes`;
+            } else {
+                message = `You have been banned. Reason: ${banData.reason || "unspecified"}\nBan expired.`;
+            }
+        } else if (banData.reason) {
+            message = `You have been banned. Reason: ${banData.reason}`;
+        }
+
+        // Hide chat UI, show ban message
+        webContainer.style.display = "none";
+        banMsg.style.display = "block";
+        banMsg.textContent = message;
+    } else {
+        // Not banned
+        webContainer.style.display = "flex";
+        banMsg.style.display = "none";
     }
 }
 
