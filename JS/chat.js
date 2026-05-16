@@ -207,7 +207,9 @@ function attachUIListeners() {
                 if (!durationHours) return
                 const reason = prompt("Reason for ban:")
                 if (!reason) return
-                const users = await get(ref(db, "users")).val();
+                const usersSnap = await get(ref(db, "users"));
+                const users = usersSnap.val();
+    
                 let targetUID = null
 
                 for (const uidKey in users) {
