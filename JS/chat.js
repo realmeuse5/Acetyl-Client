@@ -360,7 +360,7 @@ async function checkBanStatus(uid) {
                 } else {
                     // Ban expired
                     remove(banRef);
-                    webContainer.style.display = "block";
+                    webContainer.style.display = "flex";
                     banMsg.style.display = "none";
                 }
             } else {
@@ -371,7 +371,7 @@ async function checkBanStatus(uid) {
             }
         } else {
             // Not banned
-            webContainer.style.display = "block";
+            webContainer.style.display = "flex";
             banMsg.style.display = "none";
         }
     });
