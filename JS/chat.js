@@ -353,9 +353,9 @@ async function checkBanStatus(uid) {
 
             if (remainingMs > 0) {
                 const remainingMinutes = Math.floor(remainingMs / 60000);
-                message = `You have been banned. Reason: ${banData.reason || "unspecified"}\nRemaining time: ${remainingMinutes} minutes`;
+                message = `You have been banned. Reason: ${banData.reason || "unspecified"}<br>Remaining time: ${remainingMinutes} minutes`;
             } else {
-                message = `You have been banned. Reason: ${banData.reason || "unspecified"}\nBan expired.`;
+                message = `You have been banned. Reason: ${banData.reason || "unspecified"}<br>Ban expired.`;
             }
         } else if (banData.reason) {
             message = `You have been banned. Reason: ${banData.reason}`;
@@ -364,7 +364,7 @@ async function checkBanStatus(uid) {
         // Hide chat UI, show ban message
         webContainer.style.display = "none";
         banMsg.style.display = "flex";
-        banMsg.textContent = message;
+        banMsg.innerHTML = message;
     } else {
         // Not banned
         webContainer.style.display = "flex";
