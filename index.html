@@ -6,42 +6,36 @@
     <title>Acetyl Client</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cal+Sans&family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&display=swap" rel="stylesheet">
     <link rel="icon" type="image/png" href="Assets/favicon.png">
 </head>
 <body>
 
     <div id="header"> 
-        <h1>Acetyl Client</span></h1>
-        <div id="firebase"><p>Powered by</p><img src="Assets/firebaseLogo.png"></div>
+        <h1>Acetyl Client</h1>
+        <div id="firebase"><img src="Assets/firebaseLogo.png" onclick="window.open('https://firebase.google.com')"></div>
     </div>
 
-    <h1 id="banned">
-        You have been banned
-    </h1>
+    <h1 id="banned"></h1>
 
-    <div id="web-container">
+    <div id="webContainer">
         <div id="sidebar">
-            <div id="user-sidebar">
+            <div id="userSidebar">
                 <span id="username"></span>
-                <span id="gear"><i class="fa-solid fa-gear"></i></span>
             </div>
-            <button id="adminBtn">Admin</button>
-            <button id="publicChatBtn" class="publicButton" data-chat="public">Public Server</button>
-            <button id="createChatBtn" class="actionButton"><i class="fa-sharp fa-solid fa-plus" style="margin-right: 20px"></i>Create Server</button>
-            <button id="joinChatBtn" class="actionButton"><i class="fa-solid fa-arrow-right-to-bracket" style="margin-right: 20px"></i>Join Server</button>
-            <p id="myChatsTitle">Server List</p>
+            <button id="adminBtn"><i class="fa-solid fa-circle-check"></i>&nbsp;&nbsp;Admin</button>
+            <button id="publicServerBtn" data-server="public"><span>#</span>&nbsp;&nbsp;Public</button>
+            <button id="createServerBtn" class="actionButton"><i class="fa-sharp fa-solid fa-plus" style="margin-right: 20px"></i>Create Server</button>
+            <button id="joinServerBtn" class="actionButton"><i class="fa-solid fa-arrow-right-to-bracket" style="margin-right: 20px"></i>Join Server</button>
+            <p id="serverListTitle">Server List</p>
             <p id="noServersMsg">You have not joined any servers</p>
-            <div id="myChats"></div>
-            <hr id="divider">
-            <p id="activeUsersTitle">Active Users</p>
-            <p id="noActiveUsersMsg">No active users</p>
-            <div id="activeUsers"></div>
+            <div id="serverList"></div>
         </div>
 
         <div id="main">
-
-            <div id="chat-container">
+            <div id="chatContainer">
                 <div id="messages"></div>
             </div>
 
@@ -50,16 +44,11 @@
 
                 <div id="messageRow">
                     <input type="file" id="fileInput" class="hidden">
-
-                    <button id="attachBtn" class="attach-btn">+</button>
-
-                    <input type="text" id="messageInput" placeholder="Message @[name of chat]">
+                    <button id="attachBtn">+</button>
+                    <input type="text" id="messageInput">
                 </div>
-
             </div>
-
         </div>
-
     </div>
 
 <script type="module" src="JS/firebase-init.js"></script>

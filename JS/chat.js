@@ -15,35 +15,34 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
 
-// GLOBAL STATE
+// CONSTANTS
 const UPLOAD_URL = "https://acetyl-file-server.onrender.com/upload";
 
-let messagesDiv;
-let input;
-let usernameEl;
-let adminBtn;
-let myChatsContainer;
-let msg;
+// GLOBALS
+let uid = null;
 let username = "";
 let isAdmin = false; 
-let currentChat = "public";
+let currentServer = "public";
 let messagesRef = null;
 let unsubscribe = null;
-let myChats = JSON.parse(localStorage.getItem("myChats") || "[]");
-let uid = null;
+let myServers = JSON.parse(localStorage.getItem("myServers") || "[]");
 let attachedFile = null;
-let fileInput;
-let attachBtn;
-let attachedFileLabel;
-let gear;
-let publicBtn;
-let createChatButton;
-let joinChatBtn;
-let rows;
-let container;
-let emptyMsg;
-let banMsg;
-let webContainer;
+
+// UI ELEMENTS
+let messagesListEl;
+let messageInputEl;
+let usernameEl;
+let adminBtnEl;
+let serverListEl;
+let noServersMsgEl;
+let fileInputEl;
+let attachBtnEl;
+let attachedFileLabelEl;
+let publicServerBtnEl;
+let createServerBtnEl;
+let joinServerBtnEl;
+let bannedMsgEl;
+let webContainerEl;
 
 function writeOptions() {
     return { auth: { uid } };
@@ -52,24 +51,20 @@ function writeOptions() {
 
 // ONLOAD
 window.onload = async () => {
-    messagesDiv = document.getElementById("messages");
-    input = document.getElementById("messageInput");
+    messagesListEl = document.getElementById("messages");
+    messageInputEl = document.getElementById("messageInput");
     usernameEl = document.getElementById("username");
-    adminBtn = document.getElementById("adminBtn");
-    myChatsContainer = document.getElementById("myChats");
-    msg = document.getElementById("noServersMsg");
-    fileInput = document.getElementById("fileInput");
-    attachBtn = document.getElementById("attachBtn");
-    gear = document.getElementById("gear");
-    publicBtn = document.getElementById("publicChatBtn");
-    createChatButton = document.getElementById("createChatBtn");
-    joinChatBtn = document.getElementById("joinChatBtn");
-    attachedFileLabel = document.getElementById("attachedFileLabel");
-    rows = document.querySelectorAll(".chatRow");
-    container = document.getElementById("activeUsers");
-    emptyMsg = document.getElementById("noActiveUsersMsg");
-    banMsg = document.getElementById("banned")
-    webContainer = document.getElementById("web-container")
+    adminBtnEl = document.getElementById("adminBtn");
+    serverListEl = document.getElementById("serverList");
+    noServersMsgEl = document.getElementById("noServersMsg");
+    fileInputEl = document.getElementById("fileInput");
+    attachBtnEl = document.getElementById("attachBtn");
+    publicServerBtnEl = document.getElementById("publicServerBtn");
+    createServerBtnEl = document.getElementById("createServerBtn");
+    joinServerBtnEl = document.getElementById("joinServerBtn");
+    attachedFileLabelEl = document.getElementById("attachedFileLabel");
+    bannedMsgEl = document.getElementById("banned");
+    webContainerEl = document.getElementById("webContainer");
 
     await initAuthMode();
 
@@ -96,11 +91,11 @@ window.onload = async () => {
 
 async function finishAppLoad() {
     await loadSavedUser(uid);
-    await loadSavedChats();
-    await validateSavedChats();
+    await loadSavedServers();
+    await validateSavedServers();
 
     attachUIListeners();
-    switchChat("public");
+    switchServer("public");
     setupNotificationListener("public");
     checkAdminStatus();
 
@@ -110,14 +105,13 @@ async function finishAppLoad() {
 }
 
 
-// LOAD USER + CHATS 
+// LOAD USER + SERVERS
 async function loadSavedUser(currentUid) {
     const savedName = localStorage.getItem("username");
 
     if (savedName) {
         username = savedName;
         usernameEl.textContent = username;
-
         await set(ref(db, `users/${currentUid}/username`), username, writeOptions());
         return;
     }
@@ -134,110 +128,109 @@ async function loadSavedUser(currentUid) {
 
     // Generate random username
     const num = Math.floor(1000 + Math.random() * 9000); 
-    const newName = "user" + num;
-
-    username = newName;
+    username = `user${num}`;
     usernameEl.textContent = username;
 
     await set(userRef, username, writeOptions());
     localStorage.setItem("username", username);
 }
 
-async function loadSavedChats() {
+async function loadSavedServers() {
     const upgraded = [];
 
-    for (const chat of myChats) {
-        const code = typeof chat === "string" ? chat : chat.code;
+    for (const server of myServers) {
+        const code = typeof server === "string" ? server : server.code;
 
-        const snap = await get(ref(db, `chats/${code}/name`));
+        const snap = await get(ref(db, `servers/${code}/name`));
         let name = snap.exists() ? snap.val() : null;
 
         if (!name) {
-            name = `Chat ${code}`;
-            await set(ref(db, `chats/${code}/name`), name, writeOptions());
+            name = `Server ${code}`;
+            await set(ref(db, `servers/${code}/name`), name, writeOptions());
         }
 
         upgraded.push({ code, name });
-        addChatToSidebar(code, name);
+        addServerToSidebar(code, name);
     }
 
-    myChats = upgraded;
-    localStorage.setItem("myChats", JSON.stringify(myChats));
+    myServers = upgraded;
+    localStorage.setItem("myServers", JSON.stringify(myServers));
 }
 
-async function validateSavedChats() {
-    const validChats = [];
+async function validateSavedServers() {
+    const validServers = [];
 
-    for (const chat of myChats) {
-        const code = chat.code;  
-        const name = chat.name;
-
-        const chatRef = ref(db, `chats/${code}`);
-        const snapshot = await get(chatRef);
+    for (const server of myServers) {
+        const { code, name } = server;
+        const serverRef = ref(db, `servers/${code}`);
+        const snapshot = await get(serverRef);
 
         if (snapshot.exists()) {
-            validChats.push({ code, name });
+            validServers.push({ code, name });
         } else {
             console.log(`Removing deleted server: ${code}`);
             if (uid) {
-                await remove(ref(db, `chatMembers/${code}/${uid}`), writeOptions());
+                await remove(ref(db, `serverMembers/${code}/${uid}`), writeOptions());
             }
         }
     }
 
-    myChats = validChats;
-    localStorage.setItem("myChats", JSON.stringify(myChats));
+    myServers = validServers;
+    localStorage.setItem("myServers", JSON.stringify(myServers));
 
-    myChatsContainer.innerHTML = "";
-    myChats.forEach(chat => addChatToSidebar(chat.code, chat.name));
+    serverListEl.innerHTML = "";
+    myServers.forEach(server => addServerToSidebar(server.code, server.name));
     updateNoServersMessage();
 }
 
 
 // UI EVENT LISTENERS
 function attachUIListeners() {
-    gear.addEventListener("click", changeUsername);
-    publicBtn.addEventListener("click", () => switchChat("public"));
-    createChatButton.addEventListener("click", createChat);
-    joinChatBtn.addEventListener("click", joinChat);
-    adminBtn.addEventListener("click", async () => {
-        const command = prompt("Enter admin / command:")
-        if (!command) return
+    publicServerBtnEl.addEventListener("click", () => switchServer("public"));
+    createServerBtnEl.addEventListener("click", createServer);
+    joinServerBtnEl.addEventListener("click", joinServer);
+    usernameEl.addEventListener("click", changeUsername);
+
+    adminBtnEl.addEventListener("click", async () => {
+        const command = prompt("Enter admin command:");
+        if (!command) return;
 
         switch (command.toLowerCase()) {
-            case "/ban":
-                const targetUsername = prompt("Enter username to ban:")
-                if (!targetUsername) return
-                const durationHours = prompt("Ban duration hours:")
-                if (!durationHours) return
-                const reason = prompt("Reason for ban:")
-                if (!reason) return
+            case "/ban": {
+                const targetUsername = prompt("Enter username to ban:");
+                if (!targetUsername) return;
+
+                const durationHours = prompt("Ban duration (hours):");
+                if (!durationHours) return;
+
+                const reason = prompt("Reason for ban:");
+                if (!reason) return;
+
                 const usersSnap = await get(ref(db, "users"));
                 const users = usersSnap.val();
-    
-                let targetUID = null
+                let targetUid = null;
 
                 for (const uidKey in users) {
                     if (users[uidKey].username === targetUsername) {
-                        targetUID = uidKey
-                        break
+                        targetUid = uidKey;
+                        break;
                     }
                 }
 
-                if (!targetUID) {
-                    alert("User not found")
-                    return
+                if (!targetUid) {
+                    alert("User not found.");
+                    return;
                 }
 
-                const adminSnap = await get(ref(db, `admins/${targetUID}`));
+                const adminSnap = await get(ref(db, `admins/${targetUid}`));
                 if (adminSnap.exists()) {
                     alert("You cannot ban another admin.");
                     return;
                 }
 
-                await set(ref(db, `bans/${targetUID}`), {
+                await set(ref(db, `bans/${targetUid}`), {
                     username: targetUsername,
-                    reason: reason,
+                    reason,
                     duration: Number(durationHours) * 3600,
                     timestamp: Date.now(),
                     bannedBy: uid
@@ -245,56 +238,56 @@ function attachUIListeners() {
 
                 alert(`User ${targetUsername} has been banned.`);
                 break;
+            }
 
             default:
-                alert("Invalid command")
+                alert("Invalid command.");
         }
     });
-    input.addEventListener("keydown", (e) => {
+
+    messageInputEl.addEventListener("keydown", (e) => {
         if (e.key === "Enter") sendMessage();
     });
-    attachBtn.addEventListener("click", () => { fileInput.click(); });
-    fileInput.addEventListener("change", () => {
-        const file = fileInput.files[0];
+
+    attachBtnEl.addEventListener("click", () => fileInputEl.click());
+
+    fileInputEl.addEventListener("change", () => {
+        const file = fileInputEl.files[0];
         if (!file) return;
 
         const maxSize = 5 * 1024 * 1024; // 5 MB
-
         if (file.size > maxSize) {
             alert("File too large (max 5 MB).");
-            fileInput.value = "";
+            fileInputEl.value = "";
             attachedFile = null;
-            attachedFileLabel.classList.add("hidden");
+            attachedFileLabelEl.classList.add("hidden");
             return;
         }
 
         attachedFile = file;
-        attachedFileLabel.textContent = `Attached: ${file.name}`;
-        attachedFileLabel.classList.remove("hidden");
+        attachedFileLabelEl.textContent = `Attached: ${file.name}`;
+        attachedFileLabelEl.classList.remove("hidden");
     });
 }
 
 
 // USERNAME MANAGEMENT
 async function changeUsername() {
-    const name = prompt("Username:");
+    const name = prompt("Enter new username:");
     if (!name) return;
 
     const cleaned = name.trim();
     if (!cleaned || cleaned.length > 24 || /[.#$\[\]]/.test(cleaned)) {
         alert("Invalid username.");
-        return; 
+        return;
     }
 
-    if (cleaned === username) {
-        return; // no change needed
-    }
+    if (cleaned === username) return;
 
     // Check if username is already taken
     const usersSnap = await get(ref(db, "users"));
     if (usersSnap.exists()) {
         const users = usersSnap.val();
-
         for (const uidKey in users) {
             if (users[uidKey].username === cleaned) {
                 alert("Username already taken.");
@@ -303,6 +296,7 @@ async function changeUsername() {
         }
     }
 
+    // Apply new username
     username = cleaned;
     usernameEl.textContent = username;
     localStorage.setItem("username", username);
@@ -311,14 +305,14 @@ async function changeUsername() {
 
     await set(ref(db, `users/${uid}/username`), username, writeOptions());
 
-    // Update presence username in all joined chats
-    myChats.forEach(chat => {
-        const userRef = ref(db, `chats/${chat.code}/activeUsers/${uid}`);
+    // Update presence username in all joined servers
+    myServers.forEach(server => {
+        const userRef = ref(db, `servers/${server.code}/activeUsers/${uid}`);
         set(userRef, {
             username,
             lastSeen: Date.now()
-            }, writeOptions());
-        });
+        }, writeOptions());
+    });
 }
 
 
@@ -331,259 +325,270 @@ async function checkAdminStatus() {
 
     if (snap.exists()) {
         isAdmin = true;
-        adminBtn.style.display = "block";
+        adminBtnEl.style.display = "block";
     } else {
         isAdmin = false;
-        adminBtn.style.display = "none";
+        adminBtnEl.style.display = "none";
     }
 }
 
 
 // BAN STATUS
-async function checkBanStatus(uid) {
-    const banRef = ref(db, `bans/${uid}`);
+async function checkBanStatus(userUid) {
+    const banRef = ref(db, `bans/${userUid}`);
 
     onValue(banRef, (banSnap) => {
-        if (banSnap.exists()) {
-            const banData = banSnap.val();
+        if (!banSnap.exists()) {
+            // Not banned
+            webContainerEl.style.display = "flex";
+            bannedMsgEl.style.display = "none";
+            return;
+        }
 
-            if (banData.duration && banData.timestamp) {
-                const banEnd = banData.timestamp + banData.duration * 1000; // duration in seconds
-                const now = Date.now();
-                const remainingMs = banEnd - now;
+        const banData = banSnap.val();
 
-                if (remainingMs > 0) {
-                    const remainingMinutes = Math.floor(remainingMs / 60000);
-                    banMsg.innerHTML = `You have been banned.<br>Reason: ${banData.reason || "unspecified"}<br>Remaining time: ${remainingMinutes} minutes`;
-                    webContainer.style.display = "none";
-                    banMsg.style.display = "block";
-                } else {
-                    // Ban expired
-                    remove(banRef);
-                    webContainer.style.display = "flex";
-                    banMsg.style.display = "none";
-                }
+        if (banData.duration && banData.timestamp) {
+            const banEndTime = banData.timestamp + banData.duration * 1000; // duration stored in seconds
+            const remainingMs = banEndTime - Date.now();
+
+            if (remainingMs > 0) {
+                const remainingMinutes = Math.floor(remainingMs / 60000);
+                bannedMsgEl.innerHTML = `
+                    You have been banned<br>
+                    Reason: ${banData.reason || "unspecified"}<br>
+                    Remaining time: ${remainingMinutes} minutes
+                `;
+                webContainerEl.style.display = "none";
+                bannedMsgEl.style.display = "block";
             } else {
-                // Permanent ban
-                banMsg.innerHTML = `You have been banned.<br>Reason: ${banData.reason || "unspecified"}`;
-                webContainer.style.display = "none";
-                banMsg.style.display = "block";
+                // Ban expired
+                remove(banRef);
+                webContainerEl.style.display = "flex";
+                bannedMsgEl.style.display = "none";
             }
         } else {
-            // Not banned
-            webContainer.style.display = "flex";
-            banMsg.style.display = "none";
+            // Permanent ban
+            bannedMsgEl.innerHTML = `
+                You have been banned<br>
+                Reason: ${banData.reason || "unspecified"}
+            `;
+            webContainerEl.style.display = "none";
+            bannedMsgEl.style.display = "block";
         }
     });
 }
 
 
-// CHAT SWITCHING
-async function switchChat(chatId) {
-    const chatRef = ref(db, `chats/${chatId}`);
-    const snapshot = await get(chatRef);
+// SERVER SWITCHING
+async function switchServer(serverId) {
+    const serverRef = ref(db, `servers/${serverId}`);
+    const serverSnap = await get(serverRef);
 
-    if (!snapshot.exists()) {
+    if (!serverSnap.exists()) {
         alert("Server not found.");
-        validateSavedChats();
-        if (chatId !== "public") switchChat("public");
+        await validateSavedServers();
+        if (serverId !== "public") switchServer("public");
         return;
     }
 
-    const data = snapshot.val();
-    const chatName = data.name || chatId;
+    const data = serverSnap.val();
+    const serverName = data.name || serverId;
 
-    updatePlaceholder(chatName);
-    currentChat = chatId;  
-    setupPresence(chatId);
+    updatePlaceholder(serverName);
+    currentServer = serverId;
+    setupPresence(serverId);
 
-    highlightActiveChat(chatId);
+    highlightActiveServer(serverId);
 
     if (unsubscribe) unsubscribe();
 
-    messagesRef = ref(db, `chats/${chatId}/messages`);
-    messagesDiv.innerHTML = "";
+    messagesRef = ref(db, `servers/${serverId}/messages`);
+    messagesListEl.innerHTML = "";
 
-    unsubscribe = onChildAdded(messagesRef, (snapshot) => {
-        const msg = snapshot.val();
+    unsubscribe = onChildAdded(messagesRef, (snap) => {
+        const msg = snap.val();
         displayMessage(msg);
-        maybeNotify(msg, chatId);
+        maybeNotify(msg, serverId);
     });
 }
 
-function highlightActiveChat(chatId) {
-    rows.forEach(row => {
-        if (row.dataset.chat === chatId) {
+function highlightActiveServer(serverId) {
+    document.querySelectorAll(".serverRow").forEach(row => {
+        if (row.dataset.server === serverId) {
             row.classList.add("active");
         } else {
             row.classList.remove("active");
         }
     });
 
-    if (chatId === "public") {
-        publicBtn.classList.add("active");
+    if (serverId === "public") {
+        publicServerBtnEl.classList.add("active");
     } else {
-        publicBtn.classList.remove("active");
+        publicServerBtnEl.classList.remove("active");
     }
 }
 
-function updatePlaceholder(chatName) {
-    input.placeholder = `Message @${chatName}`;
+function updatePlaceholder(serverName) {
+    messageInputEl.placeholder = `Message #${serverName}`;
 }
 
 
-// CREATE/JOIN CHATS
-async function createChat() {
-    if (myChats.length >= 5) {
+// CREATE SERVER
+async function createServer() {
+    if (myServers.length >= 5) {
         alert("Server limit reached");
         return;
     }
 
-    const name = prompt("Enter a name for your chat:");
+    const name = prompt("Enter a name for your server:");
     if (!name) return;
 
     const code = Math.random().toString(36).substring(2, 8);
 
-    // Create chat
-    await set(ref(db, `chats/${code}`), {
+    // Create server
+    await set(ref(db, `servers/${code}`), {
         name,
         createdAt: Date.now()
-    }, writeOptions());  
+    }, writeOptions());
 
     // Add creator as member
     if (uid) {
-        await set(ref(db, `chatMembers/${code}/${uid}`), true, writeOptions());  
+        await set(ref(db, `serverMembers/${code}/${uid}`), true, writeOptions());
     }
 
-    addChatToSidebar(code, name);
-    switchChat(code);
+    addServerToSidebar(code, name);
+    switchServer(code);
 
     // System message
-    await push(ref(db, `chats/${code}/messages`), {
+    await push(ref(db, `servers/${code}/messages`), {
         text: `Server created. Your server code is: ${code}`,
         username: "Server Bot",
         uid: "system",
         timestamp: Date.now(),
         isAdmin: false,
         isSystem: true
-    }, writeOptions());  
+    }, writeOptions());
 }
 
-async function joinChat() {
+// JOIN SERVER
+async function joinServer() {
     const code = prompt("Enter server code:");
     if (!code) return;
 
-    if (myChats.some(c => c.code === code)) {
-        switchChat(code);
+    if (myServers.some(s => s.code === code)) {
+        switchServer(code);
         return;
     }
 
     if (code === "public") {
-        switchChat("public");
+        switchServer("public");
         return;
     }
 
-    const chatRef = ref(db, `chats/${code}`);
-    const snapshot = await get(chatRef);
+    const serverRef = ref(db, `servers/${code}`);
+    const snapshot = await get(serverRef);
 
     if (!snapshot.exists()) {
         alert("Server not found.");
         return;
     }
 
-    const data = snapshot.val();
-
-    let name = data.name;
+    let name = snapshot.val().name;
     if (!name) {
-        name = `Chat ${code}`;
-        await set(ref(db, `chats/${code}/name`), name, writeOptions()); 
+        name = `Server ${code}`;
+        await set(ref(db, `servers/${code}/name`), name, writeOptions());
     }
 
     if (uid) {
-        await set(ref(db, `chatMembers/${code}/${uid}`), true, writeOptions());  
+        await set(ref(db, `serverMembers/${code}/${uid}`), true, writeOptions());
     }
 
-    addChatToSidebar(code, name);
-    switchChat(code);
+    addServerToSidebar(code, name);
+    switchServer(code);
     setupNotificationListener(code);
 }
 
-function addChatToSidebar(code, name) {
-    if (!myChats.some(c => c.code === code)) {
-        myChats.push({ code, name });
-        localStorage.setItem("myChats", JSON.stringify(myChats));
+// ADD SERVER TO SIDEBAR
+function addServerToSidebar(code, name) {
+    if (!myServers.some(s => s.code === code)) {
+        myServers.push({ code, name });
+        localStorage.setItem("myServers", JSON.stringify(myServers));
     }
 
-    const row = document.createElement("div");
-    row.classList.add("chatRow");
-    row.dataset.chat = code;
-    row.title = code;
+    const rowEl = document.createElement("div");
+    rowEl.classList.add("serverRow");
+    rowEl.dataset.server = code;
+    rowEl.title = code;
 
-    const btn = document.createElement("button");
-    btn.textContent = name;
-    btn.classList.add("chatButton");
-    btn.dataset.chat = code;
-    btn.addEventListener("click", () => switchChat(code));
+    const buttonEl = document.createElement("button");
+    buttonEl.classList.add("serverButton");
+    buttonEl.dataset.server = code;
+    buttonEl.addEventListener("click", () => switchServer(code));
 
-    const leave = document.createElement("span");
-    leave.textContent = "";
-    leave.classList.add("leaveChat");
-    leave.addEventListener("click", (e) => {
+    const hashEl = document.createElement("span");
+    hashEl.classList.add("serverHash");
+    hashEl.textContent = "#";
+
+    const nameEl = document.createElement("span");
+    nameEl.classList.add("serverName");
+    nameEl.textContent = name;
+
+    buttonEl.appendChild(hashEl);
+    buttonEl.appendChild(nameEl);
+
+    const leaveEl = document.createElement("span");
+    leaveEl.classList.add("leaveServer");
+    leaveEl.addEventListener("click", (e) => {
         e.stopPropagation();
         leaveServer(code);
     });
 
-    row.appendChild(btn);
-    row.appendChild(leave);
-    myChatsContainer.appendChild(row);
-    rows = document.querySelectorAll(".chatRow");
+    rowEl.appendChild(buttonEl);
+    rowEl.appendChild(leaveEl);
+    serverListEl.appendChild(rowEl);
 
     updateNoServersMessage();
 }
 
+// LEAVE SERVER
 async function leaveServer(code) {
     if (!confirm("Are you sure you want to leave this server?")) return;
     if (code === "public") {
-        alert("You cannot leave the public chat.");
+        alert("You cannot leave the public server.");
         return;
     }
 
-    // Remove from local list
-    myChats = myChats.filter(c => c.code !== code);
-    localStorage.setItem("myChats", JSON.stringify(myChats));
+    myServers = myServers.filter(s => s.code !== code);
+    localStorage.setItem("myServers", JSON.stringify(myServers));
 
-    // Remove from sidebar UI
-    const rows = [...myChatsContainer.children];
-    const row = rows.find(r => r.dataset.chat === code);
+    const row = [...serverListEl.children].find(r => r.dataset.server === code);
     if (row) row.remove();
 
-    await remove(ref(db, `chats/${code}/activeUsers/${uid}`), writeOptions());
-    await remove(ref(db, `chatMembers/${code}/${uid}`), writeOptions());
+    await remove(ref(db, `servers/${code}/activeUsers/${uid}`), writeOptions());
+    await remove(ref(db, `serverMembers/${code}/${uid}`), writeOptions());
 
-    // Switch back to public
-    switchChat("public");
+    switchServer("public");
     updateNoServersMessage();
 
-    // If no members remain, delete the chat entirely
-    const membersRef = ref(db, `chatMembers/${code}`);
+    const membersRef = ref(db, `serverMembers/${code}`);
     const snapshot = await get(membersRef);
 
     if (!snapshot.exists()) {
-        await remove(ref(db, `chats/${code}`), writeOptions());
-        await remove(ref(db, `chatMembers/${code}`), writeOptions());
+        await remove(ref(db, `servers/${code}`), writeOptions());
+        await remove(ref(db, `serverMembers/${code}`), writeOptions());
     }
 }
 
 function updateNoServersMessage() {
-    if (myChats.length === 0) {
-        msg.style.display = "block";
+    if (myServers.length === 0) {
+        noServersMsgEl.style.display = "block";
     } else {
-        msg.style.display = "none";
+        noServersMsgEl.style.display = "none";
     }
 }
 
 
-// MESSAGE SENDING
+// FILE UPLOAD
 async function uploadFile(file) {
     const formData = new FormData();
     formData.append("file", file);
@@ -596,16 +601,17 @@ async function uploadFile(file) {
     if (!res.ok) throw new Error("Upload failed");
 
     const data = await res.json(); 
-    // data.url = "/uploads/filename"
-
     const base = UPLOAD_URL.replace("/upload", "");
     return base + data.url; // full public URL
 }
 
+
+// MESSAGE SENDING
 async function sendMessage() {
-    const text = input.value.trim();
+    const text = messageInputEl.value.trim();
     const file = attachedFile;
 
+    // Validation
     if (!text && !file) return;
     if (text.length > 500) return;
     if (!noAuthMode && !uid) return;
@@ -614,7 +620,7 @@ async function sendMessage() {
     let fileName = null;
     let fileType = null;
 
-    // If a file is attached, upload it first
+    // File upload
     if (file) {
         try {
             fileUrl = await uploadFile(file);
@@ -627,9 +633,10 @@ async function sendMessage() {
         }
     }
 
+    // Build message object
     const messageData = {
         text: text || null,
-        username: username,
+        username,
         uid: uid || "no-auth",
         timestamp: Date.now(),
         isAdmin: isAdmin || false,
@@ -638,17 +645,20 @@ async function sendMessage() {
         fileType
     };
 
+    // Push to Firebase
     await push(messagesRef, messageData, writeOptions());
     enforceMessageLimit();
 
     // Reset UI
-    input.value = "";
+    messageInputEl.value = "";
     attachedFile = null;
-    fileInput.value = "";
-    attachedFileLabel.textContent = "";
-    attachedFileLabel.classList.add("hidden");
+    fileInputEl.value = "";
+    attachedFileLabelEl.textContent = "";
+    attachedFileLabelEl.classList.add("hidden");
 }
 
+
+// MESSAGE LIMIT ENFORCEMENT
 async function enforceMessageLimit() {
     if (!messagesRef) return;
 
@@ -665,11 +675,9 @@ async function enforceMessageLimit() {
         for (const key of toDelete) {
             const msgData = messages[key];
 
-            // If message had a file, delete it from the server
+            // Delete file from server if attached
             if (msgData.fileUrl) {
                 const filename = msgData.fileUrl.split("/").pop();
-
-                // Build delete endpoint
                 const deleteUrl = UPLOAD_URL.replace("/upload", "") + "/delete-file?name=" + filename;
 
                 fetch(deleteUrl, { method: "DELETE" })
@@ -691,92 +699,89 @@ function displayMessage(msg) {
     const header = document.createElement("div");
     header.classList.add("message-header");
 
-    const name = document.createElement("span");
-    name.classList.add("username");
+    const nameEl = document.createElement("span");
+    nameEl.classList.add("username");
 
     if (msg.isSystem) {
-        name.textContent = msg.username;
-        name.classList.add("system-username");
+        nameEl.textContent = msg.username;
+        nameEl.classList.add("system-username");
     } else if (msg.isAdmin) {
-        name.innerHTML = `<span class="admin-badge">[ADMIN]</span><span class="admin-username">${msg.username}</span>`;
+        nameEl.innerHTML = `
+            <span class="admin-username">${msg.username}</span>
+            <i class="fa-solid fa-circle-check admin-badge" title="Admin"></i>
+        `;
     } else {
-        name.textContent = msg.username;
+        nameEl.textContent = msg.username;
     }
 
-    const time = document.createElement("span");
-    time.classList.add("timestamp");
-    time.textContent = new Date(msg.timestamp).toLocaleTimeString([], {
+    const timeEl = document.createElement("span");
+    timeEl.classList.add("timestamp");
+    timeEl.textContent = new Date(msg.timestamp).toLocaleTimeString([], {
         hour: "2-digit",
         minute: "2-digit"
     });
 
-    header.appendChild(name);
-    header.appendChild(time);
+    header.appendChild(nameEl);
+    header.appendChild(timeEl);
     wrapper.appendChild(header);
 
     // Text Content
     if (msg.text) {
-        const text = document.createElement("span");
-        text.classList.add("text");
-        text.textContent = msg.text;
-        wrapper.appendChild(text);
+        const textEl = document.createElement("span");
+        textEl.classList.add("text");
+        textEl.textContent = msg.text;
+        wrapper.appendChild(textEl);
     }
 
-    // File content
+    // File Content
     if (msg.fileUrl) {
         const fileWrapper = document.createElement("div");
         fileWrapper.classList.add("file-message");
 
-        // Image
         if (msg.fileType && msg.fileType.startsWith("image/")) {
-            const img = document.createElement("img");
-            img.src = msg.fileUrl;
-            img.classList.add("chat-image");
+            // Image
+            const imgEl = document.createElement("img");
+            imgEl.src = msg.fileUrl;
+            imgEl.classList.add("server-image");
 
-            // Image fails
-            img.onerror = () => {
-                img.remove(); 
-
+            imgEl.onerror = () => {
+                imgEl.remove();
                 const placeholder = document.createElement("div");
                 placeholder.className = "image-placeholder";
                 placeholder.textContent = "Image failed to load :(";
-
                 fileWrapper.appendChild(placeholder);
             };
 
-            fileWrapper.appendChild(img);
-        } 
-        // Otherwise display file icon + name
-        else {
+            fileWrapper.appendChild(imgEl);
+        } else {
+            // File box
             const fileBox = document.createElement("div");
             fileBox.classList.add("file-box");
 
-            const icon = document.createElement("div");
-            icon.classList.add("file-icon");
-            icon.textContent = "📄";
+            const iconEl = document.createElement("div");
+            iconEl.classList.add("file-icon");
+            iconEl.textContent = "📄";
 
-            const filename = document.createElement("span");
-            filename.classList.add("file-name");
-            filename.textContent = msg.fileName || "Download file";
+            const filenameEl = document.createElement("span");
+            filenameEl.classList.add("file-name");
+            filenameEl.textContent = msg.fileName || "Download file";
 
-            fileBox.appendChild(icon);
-            fileBox.appendChild(filename);
+            fileBox.appendChild(iconEl);
+            fileBox.appendChild(filenameEl);
 
-            // Make the whole box clickable
-            fileBox.onclick = () => {
-                window.open(msg.fileUrl, "_blank");
-            };
+            fileBox.onclick = () => window.open(msg.fileUrl, "_blank");
 
             fileWrapper.appendChild(fileBox);
         }
 
-
         wrapper.appendChild(fileWrapper);
     }
 
-    messagesDiv.appendChild(wrapper);
+    messagesListEl.appendChild(wrapper);
 
-    if (isNearBottom()) { messagesDiv.scrollTop = messagesDiv.scrollHeight; }
+    if (isNearBottom()) {
+        messagesListEl.scrollTop = messagesListEl.scrollHeight;
+    }
 }
 
 
@@ -784,7 +789,7 @@ function displayMessage(msg) {
 let presenceRef = null;
 let presenceUnsubs = [];
 
-function setupPresence(chatId) {
+function setupPresence(serverId) {
     if (!uid) return;
 
     presenceUnsubs.forEach(unsub => unsub());
@@ -795,55 +800,22 @@ function setupPresence(chatId) {
         remove(oldUserRef, writeOptions());
     }
 
-    presenceRef = ref(db, `chats/${chatId}/activeUsers`);
+    presenceRef = ref(db, `servers/${serverId}/activeUsers`);
     const userRef = child(presenceRef, uid);
 
     onDisconnect(userRef).remove(writeOptions());
 
     set(userRef, {
-        username: username,
+        username,
         lastSeen: Date.now()
-    }, writeOptions() );
-
-    presenceUnsubs.push(onChildAdded(presenceRef, updateActiveUsersList));
-    presenceUnsubs.push(onChildRemoved(presenceRef, updateActiveUsersList));
-    presenceUnsubs.push(onChildChanged(presenceRef, updateActiveUsersList));
-
-    updateActiveUsersList();
-}
-
-async function updateActiveUsersList() {
-    if (!presenceRef) return;
-
-    const snapshot = await get(presenceRef);
-    container.innerHTML = "";
-
-    if (!snapshot.exists()) {
-        emptyMsg.style.display = "block";
-        return;
-    }
-
-    emptyMsg.style.display = "none";
-
-    const users = snapshot.val();
-
-    const sorted = Object.values(users).sort((a, b) =>
-        a.username.localeCompare(b.username)
-    );
-
-    sorted.forEach(u => {
-        const el = document.createElement("div");
-        el.classList.add("activeUser");
-        el.textContent = u.username;
-        container.appendChild(el);
-    });
+    }, writeOptions());
 }
 
 
 // UTILITY
 function isNearBottom() {
     const threshold = 200;
-    const distance = messagesDiv.scrollHeight - messagesDiv.scrollTop - messagesDiv.clientHeight;
+    const distance = messagesListEl.scrollHeight - messagesListEl.scrollTop - messagesListEl.clientHeight;
     return distance < threshold;
 }
 
@@ -851,27 +823,27 @@ function isTabActive() {
     return document.visibilityState === "visible";
 }
 
-function maybeNotify(msg, chatId) {
+function maybeNotify(msg, serverId) {
     if (isTabActive()) return;
     if (msg.uid === uid) return;
     if (msg.isSystem) return;
 
     const title = `${msg.username} sent a message`;
-    const body = `on server ${chatId}`;
+    const body = `on server ${serverId}`;
 
-    new Notification(title, { body, requireInteraction: true });
+    new Notification(title, { body });
 }
 
 const notificationListeners = new Set();
 
-function setupNotificationListener(chatId) {
-    if (notificationListeners.has(chatId)) return;
-    notificationListeners.add(chatId);
+function setupNotificationListener(serverId) {
+    if (notificationListeners.has(serverId)) return;
+    notificationListeners.add(serverId);
 
-    const refMessages = ref(db, `chats/${chatId}/messages`);
+    const refMessages = ref(db, `servers/${serverId}/messages`);
 
     onChildAdded(refMessages, (snapshot) => {
         const msg = snapshot.val();
-        maybeNotify(msg, chatId);
+        maybeNotify(msg, serverId);
     });
 }
