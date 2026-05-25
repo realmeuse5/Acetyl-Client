@@ -136,6 +136,32 @@ async function loadSavedUser(currentUid) {
 }
 
 async function loadSavedServers() {
+    // Migration
+    const oldData = localStorage.getItem("myChats");
+    if (oldData) {
+        try {
+            const parsed = JSON.parse(oldData);
+            const upgradedOld = parsed.map(chat =>
+                typeof chat === "string"
+                    ? { code: chat, name: `Server ${chat}` }
+                    : chat
+            );
+
+            localStorage.setItem("myServers", JSON.stringify(upgradedOld));
+            localStorage.removeItem("myChats");
+            console.log("Migrated localStorage from myChats → myServers");
+
+            myServers = upgradedOld;
+        } catch (err) {
+            console.error("Migration failed:", err);
+            myServers = [];
+        }
+    } else {
+        // No migration needed, load directly
+        const data = localStorage.getItem("myServers");
+        myServers = data ? JSON.parse(data) : [];
+    }
+
     const upgraded = [];
 
     for (const server of myServers) {
