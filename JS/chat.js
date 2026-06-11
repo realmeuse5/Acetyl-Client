@@ -308,6 +308,7 @@ function attachUIListeners() {
         chatContainerEl.style.display = "none";
         messageBarEl.style.display = "none";
         document.querySelectorAll(".tabBtn").forEach(btn => btn.classList.remove("active"));
+        document.querySelectorAll(".serverRow").forEach(btn => btn.classList.remove("active"));
         guidelinesBtnEl.classList.add("active");
     });
 }
