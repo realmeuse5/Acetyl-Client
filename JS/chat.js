@@ -43,6 +43,10 @@ let createServerBtnEl;
 let joinServerBtnEl;
 let bannedMsgEl;
 let webContainerEl;
+let guidelinesBtnEl;
+let chatContainerEl;
+let guidelinesContainerEl;
+let messageBarEl
 
 function writeOptions() {
     return { auth: { uid } };
@@ -65,6 +69,10 @@ window.onload = async () => {
     attachedFileLabelEl = document.getElementById("attachedFileLabel");
     bannedMsgEl = document.getElementById("banned");
     webContainerEl = document.getElementById("webContainer");
+    guidelinesBtnEl = document.getElementById("guidelinesBtn");
+    chatContainerEl = document.getElementById("chatContainer");
+    guidelinesContainerEl = document.getElementById("guidelinesContainer");
+    messageBarEl = document.getElementById("messageBar");
 
     await initAuthMode();
 
@@ -294,6 +302,14 @@ function attachUIListeners() {
         attachedFileLabelEl.textContent = `Attached: ${file.name}`;
         attachedFileLabelEl.classList.remove("hidden");
     });
+
+    guidelinesBtnEl.addEventListener("click", () => {
+        guidelinesContainerEl.style.display = "block";
+        chatContainerEl.style.display = "none";
+        messageBarEl.style.display = "none";
+        document.querySelectorAll(".tabBtn").forEach(btn => btn.classList.remove("active"));
+        guidelinesBtnEl.classList.add("active");
+    });
 }
 
 
@@ -436,6 +452,8 @@ async function switchServer(serverId) {
         displayMessage(msg);
         maybeNotify(msg, serverId);
     });
+
+    showChat();
 }
 
 function highlightActiveServer(serverId) {
@@ -456,6 +474,13 @@ function highlightActiveServer(serverId) {
 
 function updatePlaceholder(serverName) {
     messageInputEl.placeholder = `Message #${serverName}`;
+}
+
+function showChat() {
+    chatContainer.style.display = "flex";
+    messageBar.style.display = "flex";
+    guidelinesContainer.style.display = "none";
+    guidelinesBtnEl.classList.remove("active");
 }
 
 
@@ -639,7 +664,7 @@ async function sendMessage() {
 
     // Validation
     if (!text && !file) return;
-    if (text.length > 500) return;
+    if (text.length > 1000) return;
     if (!noAuthMode && !uid) return;
 
     let fileUrl = null;

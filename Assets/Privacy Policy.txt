@@ -1,0 +1,42 @@
+PRIVACY POLICY
+
+This Privacy Policy explains how our chat application (“the Service”) collects, uses, and protects information. By using the Service, you agree to the practices described here.
+
+1. Information We Collect:
+When you sign in, Firebase Authentication provides us with a unique user ID (UID). You may also create a username that is stored in our database.
+Messages you send in servers (public or private) are stored in the Firebase Realtime Database.
+If you are banned, we store your UID, username, reason for ban, duration, timestamp, and the admin who issued the ban.
+Firebase may log device or connection information for authentication and security purposes.
+
+2. How We Use Information:
+To provide the chat service and allow communication between users.
+To enforce community guidelines, including bans and moderation actions.
+To maintain security and prevent abuse.
+To improve reliability and user experience.
+
+3. Data Sharing
+We do not sell or share your personal data with third parties.
+Data may be disclosed if required by law or to protect the safety of users.
+Admins within the Service can access ban records and membership information for moderation purposes.
+
+4. Data Retention
+Messages: Each server enforces a message limit. Older messages are automatically deleted when the limit is exceeded.
+Usernames: Usernames are tied to your Firebase UID. If you clear local storage, a new random username may be generated, but the old one remains in the database unless manually removed by an admin.
+Ban Records: Stored for the duration of the ban and may remain in moderation logs for accountability.
+
+5. Your Rights
+You may request that an admin remove your username entry from the database.
+You may request removal of ban records associated with your UID once a ban expires.
+You may contact us to learn what data is stored about you.
+
+6. Security
+We use Firebase Authentication and Realtime Database security rules to protect your data. While we take reasonable measures, no system is completely secure, and you use the Service at your own risk.
+
+7. Children’s Privacy
+The Service is not directed to children under 13.
+
+8. Changes to This Policy
+We may update this Privacy Policy from time to time. Updates will be posted within the Service and take effect immediately upon posting.
+
+9. Contact
+For questions about this Privacy Policy or to exercise your rights, contact us at: mbhongale0@gmail.com
