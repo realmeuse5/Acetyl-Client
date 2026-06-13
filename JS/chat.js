@@ -27,6 +27,7 @@ let messagesRef = null;
 let unsubscribe = null;
 let myServers = JSON.parse(localStorage.getItem("myServers") || "[]");
 let attachedFile = null;
+let lastMessage = null;
 
 // UI ELEMENTS
 let messagesListEl;
@@ -447,10 +448,16 @@ async function switchServer(serverId) {
 
     messagesRef = ref(db, `servers/${serverId}/messages`);
     messagesListEl.innerHTML = "";
+    lastMessage = null;
 
     unsubscribe = onChildAdded(messagesRef, (snap) => {
         const msg = snap.val();
-        displayMessage(msg);
+        const isGrouped =
+            lastMessage &&
+            lastMessage.uid === msg.uid &&
+            Math.abs(msg.timestamp - lastMessage.timestamp) < 5 * 60 * 1000;
+        displayMessage(msg, isGrouped);
+        lastMessage = msg;
         maybeNotify(msg, serverId);
     });
 
@@ -720,8 +727,8 @@ async function enforceMessageLimit() {
     const messages = snapshot.val();
     const keys = Object.keys(messages);
 
-    if (keys.length > 50) {
-        const excess = keys.length - 50;
+    if (keys.length > 100) {
+        const excess = keys.length - 100;
         const toDelete = keys.slice(0, excess);
 
         for (const key of toDelete) {
@@ -744,38 +751,41 @@ async function enforceMessageLimit() {
 
 
 // MESSAGE DISPLAY
-function displayMessage(msg) {
+function displayMessage(msg, isGrouped) {
     const wrapper = document.createElement("div");
     wrapper.classList.add("message");
+    if (isGrouped) wrapper.classList.add("grouped");
 
-    const header = document.createElement("div");
-    header.classList.add("message-header");
+    if (!isGrouped) {
+        const header = document.createElement("div");
+        header.classList.add("message-header");
 
-    const nameEl = document.createElement("span");
-    nameEl.classList.add("username");
+        const nameEl = document.createElement("span");
+        nameEl.classList.add("username");
 
-    if (msg.isSystem) {
-        nameEl.textContent = msg.username;
-        nameEl.classList.add("system-username");
-    } else if (msg.isAdmin) {
-        nameEl.innerHTML = `
-            <span class="admin-username">${msg.username}</span>
-            <i class="fa-solid fa-circle-check admin-badge" title="Admin"></i>
-        `;
-    } else {
-        nameEl.textContent = msg.username;
+        if (msg.isSystem) {
+            nameEl.textContent = msg.username;
+            nameEl.classList.add("system-username");
+        } else if (msg.isAdmin) {
+            nameEl.innerHTML = `
+                <span class="admin-username">${msg.username}</span>
+                <i class="fa-solid fa-circle-check admin-badge" title="Admin"></i>
+            `;
+        } else {
+            nameEl.textContent = msg.username;
+        }
+
+        const timeEl = document.createElement("span");
+        timeEl.classList.add("timestamp");
+        timeEl.textContent = new Date(msg.timestamp).toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit"
+        });
+
+        header.appendChild(nameEl);
+        header.appendChild(timeEl);
+        wrapper.appendChild(header);
     }
-
-    const timeEl = document.createElement("span");
-    timeEl.classList.add("timestamp");
-    timeEl.textContent = new Date(msg.timestamp).toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit"
-    });
-
-    header.appendChild(nameEl);
-    header.appendChild(timeEl);
-    wrapper.appendChild(header);
 
     // Text Content
     if (msg.text) {
