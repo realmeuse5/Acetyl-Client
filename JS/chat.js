@@ -99,14 +99,27 @@ window.onload = async () => {
 };
 
 async function finishAppLoad() {
+    const newUser = await loadSavedUser(uid);
+
     await loadSavedUser(uid);
     await loadSavedServers();
     await validateSavedServers();
 
     attachUIListeners();
-    switchServer("public");
-    setupNotificationListener("public");
-    checkAdminStatus();
+
+    if (newUser) {
+        console.log("Detected new user");
+        alert(
+            "Welcome! Since this is your first time using Acetyl Client, " +
+            "please take a moment to read the Community Guidelines. " +
+            "After that, you can head to the Public server and start chatting."
+        );
+        showGuidelines();
+    } else {
+        switchServer("public");
+        setupNotificationListener("public");
+        checkAdminStatus();
+    }
 
     if (Notification.permission !== "granted") {
         Notification.requestPermission();
@@ -122,7 +135,7 @@ async function loadSavedUser(currentUid) {
         username = savedName;
         usernameEl.textContent = username;
         await set(ref(db, `users/${currentUid}/username`), username, writeOptions());
-        return;
+        return false;
     }
 
     const userRef = ref(db, `users/${currentUid}/username`);
@@ -132,7 +145,7 @@ async function loadSavedUser(currentUid) {
         username = snap.val();
         usernameEl.textContent = username;
         localStorage.setItem("username", username);
-        return;
+        return false;
     }
 
     // Generate random username
@@ -142,6 +155,7 @@ async function loadSavedUser(currentUid) {
 
     await set(userRef, username, writeOptions());
     localStorage.setItem("username", username);
+    return true;
 }
 
 async function loadSavedServers() {
@@ -305,12 +319,7 @@ function attachUIListeners() {
     });
 
     guidelinesBtnEl.addEventListener("click", () => {
-        guidelinesContainerEl.style.display = "block";
-        chatContainerEl.style.display = "none";
-        messageBarEl.style.display = "none";
-        document.querySelectorAll(".tabBtn").forEach(btn => btn.classList.remove("active"));
-        document.querySelectorAll(".serverRow").forEach(btn => btn.classList.remove("active"));
-        guidelinesBtnEl.classList.add("active");
+        showGuidelines();
     });
 }
 
@@ -489,6 +498,15 @@ function showChat() {
     messageBar.style.display = "flex";
     guidelinesContainer.style.display = "none";
     guidelinesBtnEl.classList.remove("active");
+}
+
+function showGuidelines() {
+    guidelinesContainerEl.style.display = "block";
+    chatContainerEl.style.display = "none";
+    messageBarEl.style.display = "none";
+    document.querySelectorAll(".tabBtn").forEach(btn => btn.classList.remove("active"));
+    document.querySelectorAll(".serverRow").forEach(btn => btn.classList.remove("active"));
+    guidelinesBtnEl.classList.add("active");
 }
 
 
