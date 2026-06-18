@@ -304,7 +304,7 @@ function attachUIListeners() {
         const file = fileInputEl.files[0];
         if (!file) return;
 
-        const maxSize = 5 * 1024 * 1024; // 5 MB
+        const maxSize = 50 * 1024 * 1024;
         if (file.size > maxSize) {
             alert("File too large (max 5 MB).");
             fileInputEl.value = "";
