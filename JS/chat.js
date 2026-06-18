@@ -304,9 +304,9 @@ function attachUIListeners() {
         const file = fileInputEl.files[0];
         if (!file) return;
 
-        const maxSize = 50 * 1024 * 1024;
+        const maxSize = 10 * 1024 * 1024;
         if (file.size > maxSize) {
-            alert("File too large (max 5 MB).");
+            alert("File too large (max 10 MB).");
             fileInputEl.value = "";
             attachedFile = null;
             attachedFileLabelEl.classList.add("hidden");
