@@ -30,7 +30,7 @@ body {
     margin-top: 10px;
     margin-left: 10px;
     font-size: 1.5vw;
-    background: linear-gradient(90deg, #4E00CA, #FF00EA);
+    background: linear-gradient(90deg, #4E00CA, #FF0044);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: transparent;
@@ -208,7 +208,7 @@ body {
     font-size: 1.2rem;
     border: none;
     border-radius: 8px;
-    background: linear-gradient(90deg, #4E00CA 0%, #FF00EA 50%, #4E00CA 100%);
+    background: linear-gradient(90deg, #4E00CA 0%, #FF0044 50%, #4E00CA 100%);
     color: #ffffff;
     cursor: pointer;
     background-size: 200% 100%;
@@ -398,10 +398,15 @@ body {
 }
 
 /* GUIDELINES */
-#guidelinesContainer {
+
+#guidelinesContainer {             
+    height: 95vh;
+    overflow-y: auto;
+}
+
+#guidelines {
     height: 95vh;
     padding: 30px;
-    overflow-y: auto;
 }
 
 #guidelines h1 {
@@ -439,6 +444,78 @@ body {
 
 #guidelines a:hover {
     background-position: 0% 0;
+}
+
+#feedbackForm {
+    max-width: 90%;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    padding: 30px;
+}
+
+#feedbackForm h1 {
+    font-family: "Cal Sans", sans-serif;
+    font-size: 2rem;
+    color: #ffffff;
+    margin: 0;
+    margin-bottom: 20px;
+}
+
+#feedbackForm label {
+    color: #96979e;
+    font-size: 1.5rem;
+}
+
+#feedbackCategory, #feedbackMessage {
+    font-family: "DM Sans", sans-serif;
+    font-size: 1.2rem;
+    background-color: #2c2c30;
+    border: none;
+    color: #96979e;
+    padding: 10px;
+    border-radius: 4px;
+    margin-top: 10px;
+    margin-bottom: 20px;
+}
+
+#feedbackMessage {
+    height: 100px;
+    width: 90%;
+    resize: none;
+    color: #ffffff;
+    padding: 10px;
+}
+
+#feedbackMessage:focus {
+    outline: none;
+}
+
+#feedbackForm img {
+    width: 30%;
+    background-color: #2c2c30;
+    padding: 20px;
+    border-radius: 5px;
+    margin-top: 10px;
+}
+
+#feedbackForm button {
+    border: none;
+    width: 20%;
+    height: 50px;
+    font-size: 1.2rem;
+    padding: 5px;
+    font-family: "DM Sans", sans-serif;
+    color: #96979e;
+    border-radius: 8px;
+    margin-top: 5%;
+    background-color: #2c2c30;
+}
+
+#feedbackForm button:hover {
+    background-color: #3c3c3f;
+    color: #ffffff;
 }
 
 /* MESSAGES */
@@ -488,7 +565,7 @@ body {
 }
 
 .admin-username {
-    background: linear-gradient(90deg, #4E00CA, #FF00EA);
+    background: linear-gradient(90deg, #4E00CA, #FF0044);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     font-weight: 600;
@@ -578,4 +655,61 @@ body {
 
 .hidden {
     display: none;
+}
+
+/* FEEDBACK */
+
+#feedbackViewer {
+    height: 90vh;
+    width: 100%;
+    overflow-x: hidden;
+}
+
+.feedbackMessage {
+    padding: 0 20px;
+    margin-bottom: 20px;
+    margin-left: 0;
+    width: 100%;
+    max-width: 100%;
+    overflow: hidden;
+}
+
+.feedbackMessage:hover {
+    background-color: #222327;
+}
+
+.feedback-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    align-items: center;
+}
+
+.feedback-category {
+    font-weight: 600;
+    color: #ffffff;
+    font-size: 1.4rem;
+    display: flex;
+    margin-bottom: 5px;
+    margin-left: 20px;
+}
+
+.feedback-timestamp {
+    font-size: 0.8rem;
+    color: #96979e;
+    margin-left: 10px;
+}
+
+.feedback-body {
+    color: #ffffff;
+    font-size: 1.3rem;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    margin-left: 20px;
+}
+
+.feedback-footer {
+    color: #ffffff;
+    font-size: 1.3rem;
+    margin-left: 20px;
 }

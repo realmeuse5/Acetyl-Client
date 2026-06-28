@@ -48,6 +48,14 @@ let guidelinesBtnEl;
 let chatContainerEl;
 let guidelinesContainerEl;
 let messageBarEl
+let guidelinesEl;
+let feedbackFormEl;
+let feedbackViewerEl;
+let feedbackFormLinkEl;
+let feedbackFormLink2El;
+let feedbackCategoryEl;
+let feedbackMessageEl;
+let submitFeedbackBtnEl;
 
 function writeOptions() {
     return { auth: { uid } };
@@ -73,8 +81,15 @@ window.onload = async () => {
     guidelinesBtnEl = document.getElementById("guidelinesBtn");
     chatContainerEl = document.getElementById("chatContainer");
     guidelinesContainerEl = document.getElementById("guidelinesContainer");
+    guidelinesEl = document.getElementById("guidelines");
+    feedbackFormEl = document.getElementById("feedbackForm");
+    feedbackViewerEl = document.getElementById("feedbackViewer");
+    feedbackFormLinkEl = document.getElementById("feedbackFormLink");
+    feedbackFormLink2El = document.getElementById("feedbackFormLink2");
     messageBarEl = document.getElementById("messageBar");
-
+    feedbackCategoryEl = document.getElementById("feedbackCategory");
+    feedbackMessageEl = document.getElementById("feedbackMessage");
+    submitFeedbackBtnEl = document.getElementById("submitFeedbackBtn");
     await initAuthMode();
 
     if (noAuthMode) {
@@ -241,6 +256,12 @@ function attachUIListeners() {
     usernameEl.addEventListener("click", changeUsername);
 
     adminBtnEl.addEventListener("click", async () => {
+        const isAdmin = await get(ref(db, `admins/${uid}`));
+        if (!isAdmin.exists()) {
+            alert("You are not an admin.");
+            return;
+        }
+
         const command = prompt("Enter admin command:");
         if (!command) return;
 
@@ -289,6 +310,11 @@ function attachUIListeners() {
                 break;
             }
 
+            case "/viewfeedback": 
+                showFeedbackViewer();
+                loadFeedback();
+                break;
+
             default:
                 alert("Invalid command.");
         }
@@ -321,6 +347,18 @@ function attachUIListeners() {
     guidelinesBtnEl.addEventListener("click", () => {
         showGuidelines();
     });
+
+    feedbackFormLinkEl.addEventListener("click", (e) => {
+        e.preventDefault();
+        showFeedbackForm();
+    });
+
+    feedbackFormLink2El.addEventListener("click", (e) => {
+        e.preventDefault();
+        showFeedbackForm();
+    });
+
+    submitFeedbackBtnEl.addEventListener("click", submitFeedback);
 }
 
 
@@ -504,11 +542,118 @@ function showGuidelines() {
     guidelinesContainerEl.style.display = "block";
     chatContainerEl.style.display = "none";
     messageBarEl.style.display = "none";
+    guidelinesEl.style.display = "block";
+    feedbackFormEl.style.display = "none";
+    feedbackViewerEl.style.display = "none";
     document.querySelectorAll(".tabBtn").forEach(btn => btn.classList.remove("active"));
     document.querySelectorAll(".serverRow").forEach(btn => btn.classList.remove("active"));
     guidelinesBtnEl.classList.add("active");
 }
 
+function showFeedbackForm() {
+    guidelinesContainerEl.style.display = "block";
+    chatContainerEl.style.display = "none";
+    messageBarEl.style.display = "none";
+    guidelinesEl.style.display = "none";
+    feedbackFormEl.style.display = "block";
+    feedbackViewerEl.style.display = "none";
+    document.querySelectorAll(".tabBtn").forEach(btn => btn.classList.remove("active"));
+    document.querySelectorAll(".serverRow").forEach(btn => btn.classList.remove("active"));
+    guidelinesBtnEl.classList.add("active");
+    feedbackMessageEl.value = "";
+    feedbackCategoryEl.value = "general";
+}
+
+function showFeedbackViewer() {
+    guidelinesContainerEl.style.display = "block";
+    chatContainerEl.style.display = "none";
+    messageBarEl.style.display = "none";
+    guidelinesEl.style.display = "none";
+    feedbackFormEl.style.display = "none";
+    feedbackViewerEl.style.display = "block";
+    document.querySelectorAll(".tabBtn").forEach(btn => btn.classList.remove("active"));
+    document.querySelectorAll(".serverRow").forEach(btn => btn.classList.remove("active"));
+    guidelinesBtnEl.classList.add("active");
+}
+
+async function submitFeedback() {
+    const category = feedbackCategoryEl.value;
+    const message = feedbackMessageEl.value.trim();
+
+    if (!category) {
+        alert("Please select a feedback category.");
+        return;
+    }
+
+    if (message.length < 5) {
+        alert("Please provide more details in your feedback.");
+        return;
+    }
+
+    const user = auth.currentUser;
+    const feedbackRef = push(ref(db, "feedback"));
+    const feedbackData = {
+        uid: user.uid,
+        username: usernameEl.innerText,
+        category: category,
+        message: message,
+        timestamp: Date.now()
+    };
+
+    await set(feedbackRef, feedbackData);
+
+    alert("Thank you! Your feedback has been submitted.");
+    showGuidelines();
+}
+
+async function loadFeedback() {
+    feedbackViewerEl.innerHTML = "<p>Loading feedback...</p>";
+    const feedbackRef = ref(db, "feedback");
+    const snapshot = await get(feedbackRef);
+    if (!snapshot.exists()) {
+        feedbackViewerEl.innerHTML = "<p>No feedback available.</p>";
+        return;
+    }
+
+    const feedbackArray = []
+
+    snapshot.forEach(child => {
+        const data = child.val();
+        feedbackArray.push({ id: child.key, ...data });
+    })
+
+    feedbackArray.sort((a, b) => b.timestamp - a.timestamp);
+
+    let html = ""
+    feedbackArray.forEach(fb => {
+        const date = new Date(fb.timestamp).toLocaleString([], {
+            year: "numeric",
+            month: "numeric",
+            day: "numeric",
+            hour: "numeric",
+            minute: "numeric"
+        });
+
+        html += `
+            <div class="feedbackMessage">
+                <div class="feedback-header">
+                    <span class="feedback-category">${fb.category.toUpperCase()}</span>
+                    <span class="feedback-timestamp">${date}</span>
+                </div>
+
+                <div class="feedback-body">
+                    ${fb.message}
+                </div>
+
+                <div class="feedback-footer">
+                    Submitted by: ${fb.username}
+                </div>
+            </div>
+        `;
+    });
+
+    feedbackViewerEl.innerHTML = html;
+}
 
 // CREATE SERVER
 async function createServer() {
