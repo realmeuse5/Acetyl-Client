@@ -368,7 +368,7 @@ async function changeUsername() {
     if (!name) return;
 
     const cleaned = name.trim();
-    if (!cleaned || cleaned.length > 24 || /[.#$\[\]]/.test(cleaned)) {
+    if (!cleaned || cleaned.length > 24 || /[.#$\[\]"]/.test(cleaned)) {
         alert("Invalid username.");
         return;
     }
@@ -499,6 +499,16 @@ async function switchServer(serverId) {
 
     unsubscribe = onChildAdded(messagesRef, (snap) => {
         const msg = snap.val();
+
+        if (msg.isDM) {
+            const isSender = msg.uid === uid;
+            const isReceiver = msg.dmToUid === uid;
+
+            if (!isSender && !isReceiver) {
+                return; // hide DM from everyone else
+            }
+        }
+
         const isGrouped =
             lastMessage &&
             lastMessage.uid === msg.uid &&
@@ -833,10 +843,13 @@ async function sendMessage() {
     const text = messageInputEl.value.trim();
     const file = attachedFile;
 
+    if (!noAuthMode && !uid) return;
+
+    const dm = parseDM(text);
+
     // Validation
     if (!text && !file) return;
-    if (text.length > 1000) return;
-    if (!noAuthMode && !uid) return;
+    if (text && text.length > 1000) return;
 
     let fileUrl = null;
     let fileName = null;
@@ -855,21 +868,60 @@ async function sendMessage() {
         }
     }
 
-    // Build message object
-    const messageData = {
-        text: text || null,
-        username,
-        uid: uid || "no-auth",
-        timestamp: Date.now(),
-        isAdmin: isAdmin || false,
-        fileUrl,
-        fileName,
-        fileType
-    };
+    if (dm) {
+        const usersSnap = await get(ref(db, "users"));
+        if (!usersSnap.exists()) {
+            alert("No users found.");
+            return;
+        }
 
-    // Push to Firebase
-    await push(messagesRef, messageData, writeOptions());
-    enforceMessageLimit();
+        let targetUid = null;
+
+        usersSnap.forEach(child => {
+            const userData = child.val();
+            if (userData.username === dm.mention) {
+                targetUid = child.key;
+            }
+        });
+
+        if (!targetUid) {
+            alert(`User @"${dm.mention}" does not exist.`);
+            return;
+        }
+
+        // DM message object
+        const dmMessage = {
+            text: dm.messageBody || null,
+            username,
+            uid: uid || "no-auth",
+            timestamp: Date.now(),
+            isAdmin: isAdmin || false,
+            isDM: true,
+            dmToUid: targetUid,
+            dmTo: dm.mention,
+            fileUrl,
+            fileName,
+            fileType
+        };
+
+        await push(messagesRef, dmMessage, writeOptions());
+        enforceMessageLimit();
+    } else {
+        // Normal message object
+        const messageData = {
+            text: text || null,
+            username,
+            uid: uid || "no-auth",
+            timestamp: Date.now(),
+            isAdmin: isAdmin || false,
+            fileUrl,
+            fileName,
+            fileType
+        };
+
+        await push(messagesRef, messageData, writeOptions());
+        enforceMessageLimit();
+    }
 
     // Reset UI
     messageInputEl.value = "";
@@ -877,6 +929,20 @@ async function sendMessage() {
     fileInputEl.value = "";
     attachedFileLabelEl.textContent = "";
     attachedFileLabelEl.classList.add("hidden");
+}
+
+function parseDM(text) {
+    if (!text.startsWith('@\"')) return null;
+
+    const closingQuote = text.indexOf('"', 2);
+    if (closingQuote === -1) return null;
+
+    const mention = text.substring(2, closingQuote).trim();
+    const messageBody = text.substring(closingQuote + 1).trim();
+
+    if (!mention || !messageBody) return null;
+
+    return { mention, messageBody };
 }
 
 
