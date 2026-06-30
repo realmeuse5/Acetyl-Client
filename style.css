@@ -540,6 +540,21 @@ body {
     overflow: hidden;
 }
 
+.dm-message {
+    background-color: #1c1c1e;
+}
+
+.dm-tag {
+    color: #96979e;
+    margin-left: 20px;
+    font-size: 1.2rem;
+    font-family: "DM Sans", sans-serif;
+}
+
+.dm-username {
+    margin-left: 0 !important;
+}
+
 .message.grouped {
     margin-top: -12px;
 }
@@ -587,10 +602,6 @@ body {
     font-size: 1.4rem;
     display: flex;
     margin-bottom: 5px;
-}
-
-.admin-badge {
-    display: none;
 }
 
 .text {

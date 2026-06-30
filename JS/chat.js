@@ -510,6 +510,7 @@ async function switchServer(serverId) {
         }
 
         const isGrouped =
+            !msg.isDM &&
             lastMessage &&
             lastMessage.uid === msg.uid &&
             Math.abs(msg.timestamp - lastMessage.timestamp) < 5 * 60 * 1000;
@@ -984,6 +985,7 @@ function displayMessage(msg, isGrouped) {
     const wrapper = document.createElement("div");
     wrapper.classList.add("message");
     if (isGrouped) wrapper.classList.add("grouped");
+    if (msg.isDM) wrapper.classList.add("dm-message");
 
     if (!isGrouped) {
         const header = document.createElement("div");
@@ -991,6 +993,22 @@ function displayMessage(msg, isGrouped) {
 
         const nameEl = document.createElement("span");
         nameEl.classList.add("username");
+
+        if (msg.isDM) {
+            const dmTag = document.createElement("span");
+            dmTag.classList.add("dm-tag");
+
+            if (msg.uid === uid) {
+                // You sent the DM
+                dmTag.textContent = `[DM to @${msg.dmTo}] `;
+            } else {
+                // You received the DM
+                dmTag.textContent = `[DM] `;
+            }
+
+            header.prepend(dmTag);
+            nameEl.classList.add("dm-username");
+        }
 
         if (msg.isSystem) {
             nameEl.textContent = msg.username;
