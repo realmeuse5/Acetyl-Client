@@ -129,7 +129,8 @@ async function finishAppLoad() {
         alert(
             "Welcome! Since this is your first time using Acetyl Client, " +
             "please take a moment to read the Community Guidelines. " +
-            "After that, you can head to the Public server and start chatting."
+            "After that, you can head to the Public server and start chatting." +
+            "Note: Acetyl is designed for personal and community use. Some schools restrict chat apps, so please follow your school’s technology policies."
         );
         showGuidelines();
     } else {
