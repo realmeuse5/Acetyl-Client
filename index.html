@@ -15,7 +15,7 @@
 
     <div id="header"> 
         <h1>Acetyl Client</h1>
-        <div id="firebase"><img src="Assets/firebaseLogo.png" onclick="window.open('https://firebase.google.com')"></div>
+        <div id="firebase"><img src="Assets/firebase.png" onclick="window.open('https://firebase.google.com')"></div>
     </div>
 
     <h1 id="banned"></h1>
@@ -27,6 +27,7 @@
             </div>
             <button id="adminBtn"><i class="fa-solid fa-circle-check"></i>&nbsp;&nbsp;Admin</button>
             <button id="publicServerBtn" class="tabBtn"><span>#</span>&nbsp;&nbsp;Public</button>
+            <button id="announcementsBtn" class="tabBtn"><span>#</span>&nbsp;&nbsp;Announcements</button>
             <button id="guidelinesBtn" class="tabBtn"><span>#</span>&nbsp;&nbsp;Guidelines</button>
             <button id="createServerBtn" class="actionButton"><i class="fa-sharp fa-solid fa-plus" style="margin-right: 20px"></i>Create Server</button>
             <button id="joinServerBtn" class="actionButton"><i class="fa-solid fa-arrow-right-to-bracket" style="margin-right: 20px"></i>Join Server</button>
@@ -57,7 +58,7 @@
                     <p>Acetyl Client is meant to be a fun, energetic, and welcoming chat app for everyone. Whether you’re here to chat with friends, join new communities, or explore what this platform can do, these guidelines help keep things safe, respectful, and enjoyable. Think of this page as both a quick beginners guide and an agreement on how we treat each other.</p>
                     <h2>Getting Started</h2>
                     <p>You can join the Public server instantly, or enter a server code to join private spaces with friends or groups. Creating your own server is easy too — just pick a name and share the code with whoever you want to invite. If you ever forget the join code for a server, just hover over the server in the sidebar to see it.</p>
-                    <p>Messages support normal text, special characters, emojis, files, and anything else you can think of. Feel free to express yourself and bring some personality into the chat. Just keep it readable and avoid flooding the conversation (aka spamming). If you want to send a direct message to someone, you can do so by including @[their username] at the start of the message.</p>
+                    <p>Messages support normal text, special characters, emojis, files, and anything else you can think of. Feel free to express yourself and bring some personality into the chat. Just keep it readable and avoid flooding the conversation (aka spamming). If you want to send a direct message to someone, you can do so by including @"their username" at the start of the message. Note that there must be quotes around the username.</p>
                     <p>If something isn’t working, you have ideas, or you want to request a feature, you can always use the <a href="#" id="feedbackFormLink">feedback form</a>. It’s there for everything: bug reports, suggestions, improvements, or general thoughts about the platform.</p>
                     <h2>The Actual Guidelines</h2>
                     <p>Be respectful. Treat everyone like a real person. No harassment, hate speech, or anything like that.</p>
@@ -89,7 +90,7 @@
                     <label for="feedbackMessage">Details</label>
                     <textarea id="feedbackMessage" placeholder="Describe the issue or suggestion in detail..."></textarea><br>
                     <label>Forms are processed by</label><br>
-                    <img src="Assets/firebaseLogo.png" alt="Firebase Logo"><br>
+                    <img src="Assets/firebase.png" alt="Firebase Logo"><br>
                     <button id="submitFeedbackBtn">Submit</button>
                 </div>
                 <div id="feedbackViewer" class="hidden"></div>

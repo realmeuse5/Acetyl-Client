@@ -56,6 +56,7 @@ let feedbackFormLink2El;
 let feedbackCategoryEl;
 let feedbackMessageEl;
 let submitFeedbackBtnEl;
+let announcementsBtnEl;
 
 function writeOptions() {
     return { auth: { uid } };
@@ -90,6 +91,7 @@ window.onload = async () => {
     feedbackCategoryEl = document.getElementById("feedbackCategory");
     feedbackMessageEl = document.getElementById("feedbackMessage");
     submitFeedbackBtnEl = document.getElementById("submitFeedbackBtn");
+    announcementsBtnEl = document.getElementById("announcementsBtn");
     await initAuthMode();
 
     if (noAuthMode) {
@@ -254,6 +256,7 @@ function attachUIListeners() {
     createServerBtnEl.addEventListener("click", createServer);
     joinServerBtnEl.addEventListener("click", joinServer);
     usernameEl.addEventListener("click", changeUsername);
+    announcementsBtnEl.addEventListener("click", () => switchServer("announcements"));
 
     adminBtnEl.addEventListener("click", async () => {
         const isAdmin = await get(ref(db, `admins/${uid}`));
@@ -320,8 +323,17 @@ function attachUIListeners() {
         }
     });
 
-    messageInputEl.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") sendMessage();
+    messageInputEl.addEventListener("keydown", async (e) => {
+        if (e.key !== "Enter") return;
+
+        if (currentServer === "announcements") {
+            if (!isAdmin) return;
+            e.preventDefault();
+            await postAnnouncement();
+            return;
+        }
+
+        await sendMessage();
     });
 
     attachBtnEl.addEventListener("click", () => fileInputEl.click());
@@ -472,6 +484,35 @@ async function checkBanStatus(userUid) {
 
 // SERVER SWITCHING
 async function switchServer(serverId) {
+    if (serverId === "announcements") {
+        currentServer = "announcements";
+        highlightActiveServer("announcements");
+
+        if (isAdmin) {
+            messageInputEl.disabled = false;
+            messageInputEl.placeholder = "Post in #announcements";
+            fileInputEl.disabled = false;
+        } else {
+            messageInputEl.disabled = true;
+            messageInputEl.placeholder = "You do not have permission to post in #announcements";
+            fileInputEl.disabled = true;
+        }
+
+        if (unsubscribe) unsubscribe();
+
+        messagesRef = ref(db, "servers/announcements/messages");
+        messagesListEl.innerHTML = "";
+        lastMessage = null;
+
+        unsubscribe = onChildAdded(messagesRef, (snap) => {
+            const msg = snap.val();
+            displayAnnouncement(msg);
+        });
+
+        showChat();
+        return;
+    }
+
     const serverRef = ref(db, `servers/${serverId}`);
     const serverSnap = await get(serverRef);
 
@@ -488,9 +529,7 @@ async function switchServer(serverId) {
     updatePlaceholder(serverName);
     currentServer = serverId;
     setupPresence(serverId);
-
     highlightActiveServer(serverId);
-
     if (unsubscribe) unsubscribe();
 
     messagesRef = ref(db, `servers/${serverId}/messages`);
@@ -535,6 +574,12 @@ function highlightActiveServer(serverId) {
         publicServerBtnEl.classList.add("active");
     } else {
         publicServerBtnEl.classList.remove("active");
+    }
+
+    if (serverId === "announcements") {
+        announcementsBtnEl.classList.add("active");
+    } else {
+        announcementsBtnEl.classList.remove("active");
     }
 }
 
@@ -946,6 +991,54 @@ function parseDM(text) {
     return { mention, messageBody };
 }
 
+async function postAnnouncement() {
+    const body = messageInputEl.value.trim();
+    const file = attachedFile;
+
+    if (!noAuthMode && !uid) return;
+
+    if (!body && !file) return;
+    if (body && body.length > 2000) return; // announcements can be longer
+
+    let fileUrl = null;
+    let fileName = null;
+    let fileType = null;
+
+    if (file) {
+        try {
+            fileUrl = await uploadFile(file);
+            fileName = file.name;
+            fileType = file.type;
+        } catch (err) {
+            console.error(err);
+            alert("File upload failed.");
+            return;
+        }
+    }
+
+    const title = prompt("Enter announcement title (It is always a good idea to check with @𝙍乇𝘼𝙇𝙈𝙀𝙐𝙎𝙀 before posting an announcement):");
+    if (!title || !title.trim()) return;
+
+    const announcementData = {
+        title: title.trim(),
+        body: body || null,
+        timestamp: Date.now(),
+        postedByUid: uid || "no-auth",
+        postedByName: username,
+        fileUrl,
+        fileName,
+        fileType
+    };
+
+    await push(messagesRef, announcementData, writeOptions());
+
+    messageInputEl.value = "";
+    attachedFile = null;
+    fileInputEl.value = "";
+    attachedFileLabelEl.textContent = "";
+    attachedFileLabelEl.classList.add("hidden");
+}    
+
 
 // MESSAGE LIMIT ENFORCEMENT
 async function enforceMessageLimit() {
@@ -1049,6 +1142,82 @@ function displayMessage(msg, isGrouped) {
 
         if (msg.fileType && msg.fileType.startsWith("image/")) {
             // Image
+            const imgEl = document.createElement("img");
+            imgEl.src = msg.fileUrl;
+            imgEl.classList.add("server-image");
+
+            imgEl.onerror = () => {
+                imgEl.remove();
+                const placeholder = document.createElement("div");
+                placeholder.className = "image-placeholder";
+                placeholder.textContent = "Image failed to load :(";
+                fileWrapper.appendChild(placeholder);
+            };
+
+            fileWrapper.appendChild(imgEl);
+        } else {
+            // File box
+            const fileBox = document.createElement("div");
+            fileBox.classList.add("file-box");
+
+            const iconEl = document.createElement("div");
+            iconEl.classList.add("file-icon");
+            iconEl.textContent = "📄";
+
+            const filenameEl = document.createElement("span");
+            filenameEl.classList.add("file-name");
+            filenameEl.textContent = msg.fileName || "Download file";
+
+            fileBox.appendChild(iconEl);
+            fileBox.appendChild(filenameEl);
+
+            fileBox.onclick = () => window.open(msg.fileUrl, "_blank");
+
+            fileWrapper.appendChild(fileBox);
+        }
+
+        wrapper.appendChild(fileWrapper);
+    }
+
+    messagesListEl.appendChild(wrapper);
+
+    if (isNearBottom()) {
+        messagesListEl.scrollTop = messagesListEl.scrollHeight;
+    }
+}
+
+function displayAnnouncement(msg) {
+    const wrapper = document.createElement("div");
+    wrapper.classList.add("message", "announcementMessage");
+
+    const header = document.createElement("div");
+    header.classList.add("message-header");
+
+    const titleEl = document.createElement("span");
+    titleEl.classList.add("announcement-title");
+    titleEl.textContent = msg.title || "📢 Announcement";
+
+    const timeEl = document.createElement("span");
+    timeEl.classList.add("timestamp");
+    timeEl.textContent = new Date(msg.timestamp ?? Date.now()).toLocaleString();
+
+    header.appendChild(titleEl);
+    header.appendChild(timeEl);
+    wrapper.appendChild(header);
+
+    if (msg.body) {
+        const bodyEl = document.createElement("span");
+        bodyEl.classList.add("announcement-body");
+        bodyEl.textContent = msg.body;
+        wrapper.appendChild(bodyEl);
+    }
+
+    if (msg.fileUrl) {
+        const fileWrapper = document.createElement("div");
+        fileWrapper.classList.add("file-message");
+
+        if (msg.fileType && msg.fileType.startsWith("image/")) {
+            // Image preview
             const imgEl = document.createElement("img");
             imgEl.src = msg.fileUrl;
             imgEl.classList.add("server-image");

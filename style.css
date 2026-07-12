@@ -668,6 +668,24 @@ body {
     display: none;
 }
 
+.announcement-title {
+    font-weight: 600;
+    color: #ffffff;
+    font-size: 1.4rem;
+    display: flex;
+    margin-bottom: 5px;
+    margin-left: 20px;
+}
+
+.announcement-body {
+    color: #ffffff;
+    font-size: 1.3rem;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    white-space: pre-wrap;
+    margin-left: 20px;
+}
+
 /* FEEDBACK */
 
 #feedbackViewer {
