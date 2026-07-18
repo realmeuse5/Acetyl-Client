@@ -28,6 +28,7 @@ let unsubscribe = null;
 let myServers = JSON.parse(localStorage.getItem("myServers") || "[]");
 let attachedFile = null;
 let lastMessage = null;
+let activeUsersUnsub = null;
 
 // UI ELEMENTS
 let messagesListEl;
@@ -118,7 +119,6 @@ window.onload = async () => {
 async function finishAppLoad() {
     const newUser = await loadSavedUser(uid);
 
-    await loadSavedUser(uid);
     await loadSavedServers();
     await validateSavedServers();
 
@@ -514,6 +514,8 @@ async function switchServer(serverId) {
         return;
     }
 
+    if (activeUsersUnsub) activeUsersUnsub();
+
     const serverRef = ref(db, `servers/${serverId}`);
     const serverSnap = await get(serverRef);
 
@@ -532,6 +534,22 @@ async function switchServer(serverId) {
     setupPresence(serverId);
     highlightActiveServer(serverId);
     if (unsubscribe) unsubscribe();
+
+    document.querySelectorAll(".serverRow").forEach(row => {
+        const badge = row.querySelector(".activeBadge");
+        const leave = row.querySelector(".leaveServer");
+        const rowCode = row.dataset.server;
+        const count = parseInt(row.dataset.count || "0", 10);
+
+        if (rowCode === serverId) {
+            leave.style.display = "inline-block";
+            badge.style.display = "none";
+        } else {
+            leave.style.display = "none";
+            if (count > 0) badge.style.display = "inline-block";
+            else badge.style.display = "none";
+        }
+    });
 
     messagesRef = ref(db, `servers/${serverId}/messages`);
     messagesListEl.innerHTML = "";
@@ -560,6 +578,7 @@ async function switchServer(serverId) {
     });
 
     showChat();
+    setupActiveUserListener(serverId);
 }
 
 function highlightActiveServer(serverId) {
@@ -721,6 +740,10 @@ async function createServer() {
 
     const name = prompt("Enter a name for your server:");
     if (!name) return;
+    if (name.length > 24) { 
+        alert("Server name must be under 24 characters")
+        return
+    }
 
     const code = Math.random().toString(36).substring(2, 8);
 
@@ -812,8 +835,10 @@ function addServerToSidebar(code, name) {
     nameEl.classList.add("serverName");
     nameEl.textContent = name;
 
-    buttonEl.appendChild(hashEl);
-    buttonEl.appendChild(nameEl);
+    const badgeEl = document.createElement("span");
+    badgeEl.classList.add("activeBadge");
+    badgeEl.textContent = "0";
+    badgeEl.style.display = "none";
 
     const leaveEl = document.createElement("span");
     leaveEl.classList.add("leaveServer");
@@ -822,12 +847,33 @@ function addServerToSidebar(code, name) {
         leaveServer(code);
     });
 
+    buttonEl.appendChild(hashEl);
+    buttonEl.appendChild(nameEl);
+
     rowEl.appendChild(buttonEl);
     rowEl.appendChild(leaveEl);
+    rowEl.appendChild(badgeEl);
     serverListEl.appendChild(rowEl);
+
+    rowEl.addEventListener("mouseenter", () => {
+        leaveEl.style.display = "inline-block";
+        badgeEl.style.display = "none";
+    });
+
+    rowEl.addEventListener("mouseleave", () => {
+        leaveEl.style.display = "none";
+        const count = parseInt(rowEl.dataset.count || "0", 10);
+
+        if (code !== currentServer && count > 0) {
+            badgeEl.style.display = "inline-block";
+        } else {
+            badgeEl.style.display = "none";
+        }
+    });
 
     updateNoServersMessage();
 }
+
 
 // LEAVE SERVER
 async function leaveServer(code) {
@@ -843,19 +889,26 @@ async function leaveServer(code) {
     const row = [...serverListEl.children].find(r => r.dataset.server === code);
     if (row) row.remove();
 
-    await remove(ref(db, `servers/${code}/activeUsers/${uid}`), writeOptions());
-    await remove(ref(db, `serverMembers/${code}/${uid}`), writeOptions());
-
-    switchServer("public");
-    updateNoServersMessage();
-
     const membersRef = ref(db, `serverMembers/${code}`);
-    const snapshot = await get(membersRef);
+    const membersSnap = await get(membersRef);
+    const members = membersSnap.exists() ? Object.keys(membersSnap.val()) : [];
+    const isLastMember = members.length === 1 && members[0] === uid;
 
-    if (!snapshot.exists()) {
+    if (isLastMember) {
         await remove(ref(db, `servers/${code}`), writeOptions());
         await remove(ref(db, `serverMembers/${code}`), writeOptions());
     }
+
+    await remove(ref(db, `servers/${code}/activeUsers/${uid}`), writeOptions());
+    await remove(ref(db, `serverMembers/${code}/${uid}`), writeOptions());
+
+    if (notificationUnsubs[code]) {
+        notificationUnsubs[code]();
+        delete notificationUnsubs[code];
+    }
+
+    switchServer("public");
+    updateNoServersMessage();
 }
 
 function updateNoServersMessage() {
@@ -1290,6 +1343,36 @@ function setupPresence(serverId) {
     }, writeOptions());
 }
 
+function setupActiveUserListener(code) {
+    if (code === "public") {
+        activeUsersUnsub = null;
+        return;
+    }
+
+    const activeRef = ref(db, `servers/${code}/activeUsers`);
+
+    activeUsersUnsub = onValue(activeRef, snap => {
+        let count = 0;
+
+        snap.forEach(child => {
+            if (child.key !== uid) count++;
+        });
+
+        const row = document.querySelector(`.serverRow[data-server="${code}"]`);
+        if (!row) return;
+
+        const badge = row.querySelector(".activeBadge");
+        row.dataset.count = count;
+        badge.textContent = count;
+
+        if (code !== currentServer && count > 0 && !row.matches(":hover")) {
+            badge.style.display = "inline-block";
+        } else {
+            badge.style.display = "none";
+        }
+    });
+}
+
 
 // UTILITY
 function isNearBottom() {
@@ -1313,15 +1396,14 @@ function maybeNotify(msg, serverId) {
     new Notification(title, { body });
 }
 
-const notificationListeners = new Set();
+const notificationUnsubs = {};
 
 function setupNotificationListener(serverId) {
-    if (notificationListeners.has(serverId)) return;
-    notificationListeners.add(serverId);
+    if (notificationUnsubs[serverId]) return; // Already listening
 
     const refMessages = ref(db, `servers/${serverId}/messages`);
-
-    onChildAdded(refMessages, (snapshot) => {
+    
+    notificationUnsubs[serverId] = onChildAdded(refMessages, (snapshot) => {
         const msg = snapshot.val();
         maybeNotify(msg, serverId);
     });
