@@ -103,7 +103,7 @@ body {
     flex-direction: column;
     padding: 2px;
     background: none;
-    width: 97.5%;
+    width: 73vw;
 }
 
 #messageRow {
@@ -121,6 +121,7 @@ body {
 
 #messageInput {
     padding: 18px;
+    padding-left: 10px;
     font-size: 1rem;
     border: none;
     border-radius: 8px;
@@ -137,7 +138,15 @@ body {
     outline: none;
 }
 
-#messageInput::placeholder {
+#messageInput:empty::before,
+#messageInput:has(> br:only-child)::before {
+    content: attr(data-placeholder);
+    color: #96979e;
+    pointer-events: none;
+    display: block;
+}
+
+.input-mention {
     color: #96979e;
 }
 
@@ -158,6 +167,7 @@ body {
 #attachedFileLabel {
     margin-bottom: 15px;
     margin-left: 10px;
+    margin-top: 5px;
     font-size: 1rem;
     color: #96979e;
 }

@@ -325,16 +325,47 @@ function attachUIListeners() {
     });
 
     messageInputEl.addEventListener("keydown", async (e) => {
-        if (e.key !== "Enter") return;
+        if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault(); 
 
-        if (currentServer === "announcements") {
-            if (!isAdmin) return;
-            e.preventDefault();
-            await postAnnouncement();
+            if (currentServer === "announcements") {
+                if (!isAdmin) return;
+                await postAnnouncement();
+                return;
+            }
+
+            await sendMessage();
+        }
+    });
+
+    messageInputEl.addEventListener("blur", () => {
+        if (!messageInputEl.innerText.trim()) messageInputEl.innerHTML = ""
+    });
+
+    messageInputEl.addEventListener("input", () => {
+        if (!messageInputEl.innerText.trim()) {
+            messageInputEl.innerHTML = "";
             return;
         }
 
-        await sendMessage();
+        const text = messageInputEl.innerText;
+        const atIndex = text.indexOf("@");
+        const commaIndex = text.indexOf(",");
+
+        if (atIndex !== -1 && commaIndex > atIndex) {
+            const beforeMention = text.substring(0, atIndex);
+            const mentionPart = text.substring(atIndex, commaIndex + 1);
+            const restOfText = text.substring(commaIndex + 1);
+
+            messageInputEl.innerHTML = `${beforeMention}<span class="input-mention" contenteditable="false">${mentionPart}</span>${restOfText}`;
+
+            const range = document.createRange();
+            const selection = window.getSelection();
+            range.selectNodeContents(messageInputEl);
+            range.collapse(false);
+            selection.removeAllRanges();
+            selection.addRange(range);
+        }
     });
 
     attachBtnEl.addEventListener("click", () => fileInputEl.click());
@@ -381,7 +412,7 @@ async function changeUsername() {
     if (!name) return;
 
     const cleaned = name.trim();
-    if (!cleaned || cleaned.length > 24 || /[.#$\[\]"]/.test(cleaned)) {
+    if (!cleaned || cleaned.length > 24 || /[.#$\[\]",]/.test(cleaned)) {
         alert("Invalid username.");
         return;
     }
@@ -491,11 +522,11 @@ async function switchServer(serverId) {
 
         if (isAdmin) {
             messageInputEl.disabled = false;
-            messageInputEl.placeholder = "Post in #announcements";
+            messageInputEl.setAttribute("data-placeholder", "Post in #announcements");
             fileInputEl.disabled = false;
         } else {
             messageInputEl.disabled = true;
-            messageInputEl.placeholder = "You do not have permission to post in #announcements";
+            messageInputEl.setAttribute("data-placeholder", "You do not have permission to post in #announcements");
             fileInputEl.disabled = true;
         }
 
@@ -604,13 +635,13 @@ function highlightActiveServer(serverId) {
 }
 
 function updatePlaceholder(serverName) {
-    messageInputEl.placeholder = `Message #${serverName}`;
+    messageInputEl.setAttribute("data-placeholder", `Message #${serverName}`);
 }
 
 function showChat() {
-    chatContainer.style.display = "flex";
-    messageBar.style.display = "flex";
-    guidelinesContainer.style.display = "none";
+    chatContainerEl.style.display = "flex";
+    messageBarEl.style.display = "flex";
+    guidelinesContainerEl.style.display = "none";
     guidelinesBtnEl.classList.remove("active");
 }
 
@@ -940,7 +971,7 @@ async function uploadFile(file) {
 
 // MESSAGE SENDING
 async function sendMessage() {
-    const text = messageInputEl.value.trim();
+    const text = messageInputEl.innerText.trim();
     const file = attachedFile;
 
     if (!noAuthMode && !uid) return;
@@ -985,7 +1016,7 @@ async function sendMessage() {
         });
 
         if (!targetUid) {
-            alert(`User @"${dm.mention}" does not exist.`);
+            alert(`User @${dm.mention} does not exist.`);
             return;
         }
 
@@ -1024,7 +1055,7 @@ async function sendMessage() {
     }
 
     // Reset UI
-    messageInputEl.value = "";
+    messageInputEl.innerHTML = "";
     attachedFile = null;
     fileInputEl.value = "";
     attachedFileLabelEl.textContent = "";
@@ -1032,21 +1063,21 @@ async function sendMessage() {
 }
 
 function parseDM(text) {
-    if (!text.startsWith('@\"')) return null;
+    if (!text.startsWith("@")) return null;
 
-    const closingQuote = text.indexOf('"', 2);
-    if (closingQuote === -1) return null;
+    const commaIndex = text.indexOf(",");
 
-    const mention = text.substring(2, closingQuote).trim();
-    const messageBody = text.substring(closingQuote + 1).trim();
+    if (commaIndex === -1) return null; 
+
+    const mention = text.substring(1, commaIndex).trim();
+    const messageBody = text.substring(commaIndex + 1).trim();
 
     if (!mention || !messageBody) return null;
-
     return { mention, messageBody };
 }
 
 async function postAnnouncement() {
-    const body = messageInputEl.value.trim();
+    const body = messageInputEl.innerText.trim();
     const file = attachedFile;
 
     if (!noAuthMode && !uid) return;
@@ -1086,7 +1117,7 @@ async function postAnnouncement() {
 
     await push(messagesRef, announcementData, writeOptions());
 
-    messageInputEl.value = "";
+    messageInputEl.innerHTML = "";
     attachedFile = null;
     fileInputEl.value = "";
     attachedFileLabelEl.textContent = "";
@@ -1147,7 +1178,7 @@ function displayMessage(msg, isGrouped) {
 
             if (msg.uid === uid) {
                 // You sent the DM
-                dmTag.textContent = `[DM to @${msg.dmTo}] `;
+                dmTag.textContent = `[DM to ${msg.dmTo}] `;
             } else {
                 // You received the DM
                 dmTag.textContent = `[DM] `;
@@ -1167,6 +1198,24 @@ function displayMessage(msg, isGrouped) {
             `;
         } else {
             nameEl.textContent = msg.username;
+        }
+
+        if (!msg.isSystem) {
+            nameEl.style.cursor = "pointer";
+            nameEl.title = "Click to DM this user";
+
+            nameEl.addEventListener("click", () => {
+                if (msg.username === username) return;
+
+                messageInputEl.innerHTML = `<span class="input-mention" contenteditable="false">@${msg.username},</span>&nbsp;`;
+                messageInputEl.focus();
+                const range = document.createRange();
+                const selection = window.getSelection();
+                range.selectNodeContents(messageInputEl);
+                range.collapse(false);
+                selection.removeAllRanges();
+                selection.addRange(range);
+            });
         }
 
         const timeEl = document.createElement("span");
