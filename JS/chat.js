@@ -29,6 +29,9 @@ let myServers = JSON.parse(localStorage.getItem("myServers") || "[]");
 let attachedFile = null;
 let lastMessage = null;
 let activeUsersUnsub = null;
+let unreadCounts = {};
+let lastRead = JSON.parse(localStorage.getItem("lastRead") || "{}");
+let contextMenuTargetServer = null;
 
 // UI ELEMENTS
 let messagesListEl;
@@ -58,6 +61,9 @@ let feedbackCategoryEl;
 let feedbackMessageEl;
 let submitFeedbackBtnEl;
 let announcementsBtnEl;
+let contextMenuEl;
+let contextLeaveBtnEl
+let contextCopyCodeBtnEl;
 
 function writeOptions() {
     return { auth: { uid } };
@@ -93,6 +99,10 @@ window.onload = async () => {
     feedbackMessageEl = document.getElementById("feedbackMessage");
     submitFeedbackBtnEl = document.getElementById("submitFeedbackBtn");
     announcementsBtnEl = document.getElementById("announcementsBtn");
+    contextMenuEl = document.getElementById("serverContextMenu");
+    contextLeaveBtnEl = document.getElementById("contextLeaveServer");
+    contextCopyCodeBtnEl = document.getElementById("contextCopyCode");
+    
     await initAuthMode();
 
     if (noAuthMode) {
@@ -139,9 +149,11 @@ async function finishAppLoad() {
         checkAdminStatus();
     }
 
-    if (Notification.permission !== "granted") {
-        Notification.requestPermission();
-    }
+    if (Notification.permission !== "granted") Notification.requestPermission();
+
+    myServers.forEach(server => {
+        setupNotificationListener(server.code);
+    });
 }
 
 
@@ -403,6 +415,46 @@ function attachUIListeners() {
     });
 
     submitFeedbackBtnEl.addEventListener("click", submitFeedback);
+
+    document.addEventListener("click", hideContextMenu);
+    document.addEventListener("scroll", hideContextMenu, true);
+
+    if (contextLeaveBtnEl) {
+        contextLeaveBtnEl.addEventListener("click", (e) => {
+            e.stopPropagation(); 
+            if (contextMenuTargetServer) {
+                leaveServer(contextMenuTargetServer);
+            }
+            hideContextMenu();
+        });
+    }
+
+    if (contextCopyCodeBtnEl) {
+        contextCopyCodeBtnEl.addEventListener("click", async (e) => {
+            e.stopPropagation();
+
+            if (contextMenuTargetServer) {
+                const codeToCopy = contextMenuTargetServer;
+
+                try {
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        await navigator.clipboard.writeText(codeToCopy);
+                    } else {
+                        const textarea = document.createElement("textarea");
+                        textarea.value = codeToCopy;
+                        document.body.appendChild(textarea);
+                        textarea.select();
+                        document.execCommand("copy");
+                        document.body.removeChild(textarea);
+                    }
+                } catch (err) {
+                    console.error("Failed to copy code: ", err);
+                }
+            }
+
+            hideContextMenu(); 
+        });
+    }
 }
 
 
@@ -566,21 +618,15 @@ async function switchServer(serverId) {
     highlightActiveServer(serverId);
     if (unsubscribe) unsubscribe();
 
-    document.querySelectorAll(".serverRow").forEach(row => {
-        const badge = row.querySelector(".activeBadge");
-        const leave = row.querySelector(".leaveServer");
-        const rowCode = row.dataset.server;
-        const count = parseInt(row.dataset.count || "0", 10);
-
-        if (rowCode === serverId) {
-            leave.style.display = "inline-block";
+    unreadCounts[serverId] = 0;
+    const activeRow = document.querySelector(`.serverRow[data-server="${serverId}"]`);
+    if (activeRow) {
+        const badge = activeRow.querySelector(".unreadBadge");
+        if (badge) {
+            badge.textContent = "0";
             badge.style.display = "none";
-        } else {
-            leave.style.display = "none";
-            if (count > 0) badge.style.display = "inline-block";
-            else badge.style.display = "none";
         }
-    });
+    }
 
     messagesRef = ref(db, `servers/${serverId}/messages`);
     messagesListEl.innerHTML = "";
@@ -610,6 +656,7 @@ async function switchServer(serverId) {
 
     showChat();
     setupActiveUserListener(serverId);
+    markServerAsRead(serverId);
 }
 
 function highlightActiveServer(serverId) {
@@ -762,6 +809,22 @@ async function loadFeedback() {
     feedbackViewerEl.innerHTML = html;
 }
 
+function markServerAsRead(serverId) {
+    unreadCounts[serverId] = 0;
+    lastRead[serverId] = Date.now();
+    localStorage.setItem("lastRead", JSON.stringify(lastRead));
+
+    const activeRow = document.querySelector(`.serverRow[data-server="${serverId}"]`);
+    if (activeRow) {
+        const badge = activeRow.querySelector(".unreadBadge");
+        if (badge) {
+            badge.textContent = "0";
+            badge.style.display = "none";
+        }
+    }
+}
+
+
 // CREATE SERVER
 async function createServer() {
     if (myServers.length >= 5) {
@@ -848,6 +911,10 @@ function addServerToSidebar(code, name) {
         localStorage.setItem("myServers", JSON.stringify(myServers));
     }
 
+    if (!(code in unreadCounts)) {
+        unreadCounts[code] = 0;
+    }
+
     const rowEl = document.createElement("div");
     rowEl.classList.add("serverRow");
     rowEl.dataset.server = code;
@@ -858,6 +925,9 @@ function addServerToSidebar(code, name) {
     buttonEl.dataset.server = code;
     buttonEl.addEventListener("click", () => switchServer(code));
 
+    rowEl.addEventListener("contextmenu", (e) => showServerContextMenu(e, code));
+    buttonEl.addEventListener("contextmenu", (e) => showServerContextMenu(e, code));
+
     const hashEl = document.createElement("span");
     hashEl.classList.add("serverHash");
     hashEl.textContent = "#";
@@ -867,40 +937,16 @@ function addServerToSidebar(code, name) {
     nameEl.textContent = name;
 
     const badgeEl = document.createElement("span");
-    badgeEl.classList.add("activeBadge");
+    badgeEl.classList.add("unreadBadge");
     badgeEl.textContent = "0";
     badgeEl.style.display = "none";
-
-    const leaveEl = document.createElement("span");
-    leaveEl.classList.add("leaveServer");
-    leaveEl.addEventListener("click", (e) => {
-        e.stopPropagation();
-        leaveServer(code);
-    });
 
     buttonEl.appendChild(hashEl);
     buttonEl.appendChild(nameEl);
 
     rowEl.appendChild(buttonEl);
-    rowEl.appendChild(leaveEl);
     rowEl.appendChild(badgeEl);
     serverListEl.appendChild(rowEl);
-
-    rowEl.addEventListener("mouseenter", () => {
-        leaveEl.style.display = "inline-block";
-        badgeEl.style.display = "none";
-    });
-
-    rowEl.addEventListener("mouseleave", () => {
-        leaveEl.style.display = "none";
-        const count = parseInt(rowEl.dataset.count || "0", 10);
-
-        if (code !== currentServer && count > 0) {
-            badgeEl.style.display = "inline-block";
-        } else {
-            badgeEl.style.display = "none";
-        }
-    });
 
     updateNoServersMessage();
 }
@@ -1406,19 +1452,6 @@ function setupActiveUserListener(code) {
         snap.forEach(child => {
             if (child.key !== uid) count++;
         });
-
-        const row = document.querySelector(`.serverRow[data-server="${code}"]`);
-        if (!row) return;
-
-        const badge = row.querySelector(".activeBadge");
-        row.dataset.count = count;
-        badge.textContent = count;
-
-        if (code !== currentServer && count > 0 && !row.matches(":hover")) {
-            badge.style.display = "inline-block";
-        } else {
-            badge.style.display = "none";
-        }
     });
 }
 
@@ -1446,14 +1479,53 @@ function maybeNotify(msg, serverId) {
 }
 
 const notificationUnsubs = {};
+const appStartTime = Date.now();
 
 function setupNotificationListener(serverId) {
-    if (notificationUnsubs[serverId]) return; // Already listening
+    if (notificationUnsubs[serverId]) return;
 
     const refMessages = ref(db, `servers/${serverId}/messages`);
     
     notificationUnsubs[serverId] = onChildAdded(refMessages, (snapshot) => {
         const msg = snapshot.val();
+        if (!msg || !msg.timestamp) return;
+
+        const serverLastRead = lastRead[serverId] || 0;
+
+        if (msg.timestamp <= serverLastRead) return;
+
+        if (serverId !== currentServer && msg.uid !== uid && !msg.isSystem) {
+            if (msg.isDM && msg.dmToUid !== uid) return;
+
+            unreadCounts[serverId] = (unreadCounts[serverId] || 0) + 1;
+
+            const row = document.querySelector(`.serverRow[data-server="${serverId}"]`);
+            if (row) {
+                const badge = row.querySelector(".unreadBadge");
+                if (badge) {
+                    badge.textContent = unreadCounts[serverId];
+                    badge.style.display = "inline-block";
+                }
+            }
+        }
+
         maybeNotify(msg, serverId);
     });
+}
+
+function showServerContextMenu(e, serverCode) {
+    e.preventDefault(); 
+    e.stopPropagation();
+
+    if (serverCode === "public" || serverCode === "announcements") return;
+
+    contextMenuTargetServer = serverCode;
+    contextMenuEl.style.top = `${e.clientY}px`;
+    contextMenuEl.style.left = `${e.clientX}px`;
+    contextMenuEl.classList.remove("hidden");
+}
+
+function hideContextMenu() {
+    if (contextMenuEl) contextMenuEl.classList.add("hidden");
+    contextMenuTargetServer = null;
 }
