@@ -64,10 +64,14 @@ let announcementsBtnEl;
 let contextMenuEl;
 let contextLeaveBtnEl
 let contextCopyCodeBtnEl;
+let rightSidebarEl;
+let closeRightSidebarBtnEl;
+let contextServerMembersBtnEl;
+let activeMembersListEl;
+let allMembersListEl;
+let allMembersHeaderEl;
 
-function writeOptions() {
-    return { auth: { uid } };
-}
+function writeOptions() { return { auth: { uid } }; }
 
 
 // ONLOAD
@@ -102,7 +106,12 @@ window.onload = async () => {
     contextMenuEl = document.getElementById("serverContextMenu");
     contextLeaveBtnEl = document.getElementById("contextLeaveServer");
     contextCopyCodeBtnEl = document.getElementById("contextCopyCode");
-    
+    rightSidebarEl = document.getElementById("rightSidebar");
+    closeRightSidebarBtnEl = document.getElementById("closeRightSidebar");
+    contextServerMembersBtnEl = document.getElementById("contextServerMembers");
+    activeMembersListEl = document.getElementById("activeMembersList");
+    allMembersListEl = document.getElementById("allMembersList");
+    allMembersHeaderEl = document.getElementById("allMembersHeader");
     await initAuthMode();
 
     if (noAuthMode) {
@@ -455,6 +464,30 @@ function attachUIListeners() {
             hideContextMenu(); 
         });
     }
+
+    if (contextServerMembersBtnEl) {
+        contextServerMembersBtnEl.addEventListener('click', () => {
+            if (contextMenuTargetServer) {
+                if (rightSidebarEl) {
+                    rightSidebarEl.style.display = 'flex';
+                }
+
+                if (currentServer !== contextMenuTargetServer) {
+                    switchServer(contextMenuTargetServer);
+                } else {
+                    setupActiveUserListener(contextMenuTargetServer);
+                    loadAllMembers(contextMenuTargetServer);
+                }
+            }
+            hideContextMenu();
+        });
+    }
+
+    if (closeRightSidebarBtnEl) {
+        closeRightSidebarBtnEl.addEventListener('click', () => {
+            rightSidebarEl.style.display = 'none';
+        });
+    }
 }
 
 
@@ -656,6 +689,9 @@ async function switchServer(serverId) {
 
     showChat();
     setupActiveUserListener(serverId);
+    if (rightSidebarEl && getComputedStyle(rightSidebarEl).display !== "none") {
+        loadAllMembers(serverId);
+    }
     markServerAsRead(serverId);
 }
 
@@ -1439,20 +1475,76 @@ function setupPresence(serverId) {
 }
 
 function setupActiveUserListener(code) {
-    if (code === "public") {
+    if (activeUsersUnsub) {
+        activeUsersUnsub();
         activeUsersUnsub = null;
-        return;
     }
+
+    if (!activeMembersListEl) return;
+    activeMembersListEl.innerHTML = "";
 
     const activeRef = ref(db, `servers/${code}/activeUsers`);
 
-    activeUsersUnsub = onValue(activeRef, snap => {
-        let count = 0;
+    activeUsersUnsub = onValue(activeRef, (snap) => {
+        activeMembersListEl.innerHTML = "";
 
-        snap.forEach(child => {
-            if (child.key !== uid) count++;
+        if (!snap.exists()) {
+            activeMembersListEl.innerHTML = "<li>No active users</li>";
+            return;
+        }
+
+        snap.forEach((childSnap) => {
+            const userData = childSnap.val();
+            const li = document.createElement("li");
+            li.textContent = userData.username;
+            activeMembersListEl.appendChild(li);
         });
     });
+}
+
+async function loadAllMembers(code) {
+    if (!allMembersListEl) return;
+
+    const isPublic = (code === "public" || code === "announcements");
+
+    if (allMembersHeaderEl) {
+        allMembersHeaderEl.style.display = isPublic ? "none" : "block";
+    }
+    allMembersListEl.style.display = isPublic ? "none" : "block";
+
+    if (isPublic) {
+        allMembersListEl.innerHTML = "";
+        return;
+    }
+
+    allMembersListEl.innerHTML = "<li>Loading members...</li>";
+
+    const membersSnap = await get(ref(db, `serverMembers/${code}`));
+    allMembersListEl.innerHTML = "";
+
+    if (!membersSnap.exists()) {
+        allMembersListEl.innerHTML = "<li>No members found</li>";
+        return;
+    }
+
+    const memberUids = Object.keys(membersSnap.val());
+
+    for (const memberUid of memberUids) {
+        const userSnap = await get(ref(db, `users/${memberUid}/username`));
+
+        if (!userSnap.exists()) {
+            await remove(ref(db, `serverMembers/${code}/${memberUid}`));
+            continue;
+        }
+
+        const li = document.createElement("li");
+        li.textContent = userSnap.val();
+        allMembersListEl.appendChild(li);
+    }
+
+    if (allMembersListEl.children.length === 0) {
+        allMembersListEl.innerHTML = "<li>No members found</li>";
+    }
 }
 
 
@@ -1520,9 +1612,29 @@ function showServerContextMenu(e, serverCode) {
     if (serverCode === "public" || serverCode === "announcements") return;
 
     contextMenuTargetServer = serverCode;
-    contextMenuEl.style.top = `${e.clientY}px`;
-    contextMenuEl.style.left = `${e.clientX}px`;
     contextMenuEl.classList.remove("hidden");
+
+    const menuHeight = contextMenuEl.offsetHeight;
+    const menuWidth = contextMenuEl.offsetWidth;
+    const windowHeight = window.innerHeight;
+    const windowWidth = window.innerWidth;
+
+    let top = e.clientY;
+    let left = e.clientX;
+
+    if (e.clientY + menuHeight > windowHeight) {
+        top = e.clientY - menuHeight;
+        contextMenuEl.classList.add("open-up");
+    } else {
+        contextMenuEl.classList.remove("open-up");
+    }
+
+    if (e.clientX + menuWidth > windowWidth) {
+        left = e.clientX - menuWidth;
+    }
+
+    contextMenuEl.style.top = `${top}px`;
+    contextMenuEl.style.left = `${left}px`;
 }
 
 function hideContextMenu() {
