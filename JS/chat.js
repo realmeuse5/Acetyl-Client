@@ -70,6 +70,7 @@ let contextServerMembersBtnEl;
 let activeMembersListEl;
 let allMembersListEl;
 let allMembersHeaderEl;
+let contextInviteBtnEl;
 
 function writeOptions() { return { auth: { uid } }; }
 
@@ -112,6 +113,7 @@ window.onload = async () => {
     activeMembersListEl = document.getElementById("activeMembersList");
     allMembersListEl = document.getElementById("allMembersList");
     allMembersHeaderEl = document.getElementById("allMembersHeader");
+    contextInviteBtnEl = document.getElementById("contextInvite");
     await initAuthMode();
 
     if (noAuthMode) {
@@ -153,7 +155,8 @@ async function finishAppLoad() {
         );
         showGuidelines();
     } else {
-        switchServer("public");
+        const handledInvite = await handleInvite();
+        if (!handledInvite) switchServer("public");
         setupNotificationListener("public");
         checkAdminStatus();
     }
@@ -335,7 +338,7 @@ function attachUIListeners() {
                 break;
             }
 
-            case "/viewfeedback": 
+            case "/feedback": 
                 showFeedbackViewer();
                 loadFeedback();
                 break;
@@ -486,6 +489,17 @@ function attachUIListeners() {
     if (closeRightSidebarBtnEl) {
         closeRightSidebarBtnEl.addEventListener('click', () => {
             rightSidebarEl.style.display = 'none';
+        });
+    }
+
+    if (contextInviteBtnEl) {
+        contextInviteBtnEl.addEventListener("click", (e) => {
+            e.stopPropagation();
+            if (contextMenuTargetServer) {
+                const inviteUrl = `${window.location.origin}/#${contextMenuTargetServer}`;
+                alert(`Invite link:\n${inviteUrl}`);
+            }
+            hideContextMenu();
         });
     }
 }
@@ -1640,4 +1654,44 @@ function showServerContextMenu(e, serverCode) {
 function hideContextMenu() {
     if (contextMenuEl) contextMenuEl.classList.add("hidden");
     contextMenuTargetServer = null;
+}
+
+async function handleInvite() {
+    const rawHash = window.location.hash;
+    if (!rawHash || rawHash.length <= 1) return false;
+
+    const joinCode = rawHash.substring(1).trim();
+    if (!joinCode) return false;
+
+    history.replaceState("", document.title, window.location.pathname + window.location.search);
+
+    if (joinCode === "public" || joinCode === "announcements" || myServers.some(s => s.code === joinCode)) {
+        switchServer(joinCode);
+        return true;
+    }
+
+    try {
+        const serverRef = ref(db, `servers/${joinCode}`);
+        const snapshot = await get(serverRef);
+
+        if (!snapshot.exists()) {
+            alert("Invalid invite link.");
+            return false;
+        }
+
+        const serverData = snapshot.val();
+        const serverName = serverData.name || `Server ${joinCode}`;
+
+        if (uid) {
+            await set(ref(db, `serverMembers/${joinCode}/${uid}`), true, writeOptions());
+        }
+
+        addServerToSidebar(joinCode, serverName);
+        switchServer(joinCode);
+        setupNotificationListener(joinCode);
+        
+        return true;
+    } catch (err) {
+        return false;
+    }
 }
