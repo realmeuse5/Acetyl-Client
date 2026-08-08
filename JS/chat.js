@@ -520,9 +520,12 @@ function attachUIListeners() {
                 return;
             }
 
+            const server = myServers.find(s => s.code === contextMenuTargetServer);
+            const serverName = server ? server.name : contextMenuTargetServer;
+
             // KICK USER LOGIC HERE
 
-            alert(`${targetUser} was kicked from ${contextMenuTargetServer}`);
+            alert(`${targetUser} was kicked from ${serverName}`);
 
             hideContextMenu();
         });
