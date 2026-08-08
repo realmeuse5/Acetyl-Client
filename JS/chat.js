@@ -1072,25 +1072,36 @@ function updateNoServersMessage() {
 
 
 // KICK FROM SERVER
-function updateKickButton(serverCode) {
+async function updateKickButton(serverCode) {
     if (!contextKickBtnEl) return;
 
-    const server = myServers.find(s => s.code === serverCode);
-
-    if (!server || serverCode === "public" || serverCode === "announcements") {
+    if (serverCode === "public" || serverCode === "announcements") {
         contextKickBtnEl.classList.add("disabled");
         return;
     }
 
-    if (!server.createdBy) {
+    try {
+        const serverSnap = await get(ref(db, `servers/${serverCode}`));
+
+        if (!serverSnap.exists()) {
+            contextKickBtnEl.classList.add("disabled");
+            return;
+        }
+
+        const serverData = serverSnap.val();
+
+        if (!serverData.createdBy) {
+            contextKickBtnEl.classList.add("disabled");
+            contextKickBtnEl.title = "This server is ownerless so kicking is disabled. Contact @𝙍乇𝘼𝙇𝙈𝙀𝙐𝙎𝙀 to claim ownership.";
+        } else if (serverData.createdBy !== uid) {
+            contextKickBtnEl.classList.add("disabled");
+            contextKickBtnEl.title = "You are not the owner of this server.";
+        } else {
+            contextKickBtnEl.classList.remove("disabled");
+            contextKickBtnEl.title = "";
+        }
+    } catch (err) {
         contextKickBtnEl.classList.add("disabled");
-        contextKickBtnEl.title = "This server is ownerless so kicking is disabled. Contact @𝙍乇𝘼𝙇𝙈𝙀𝙐𝙎𝙀 to claim ownership.";
-    } else if (server.createdBy !== uid) {
-        contextKickBtnEl.classList.add("disabled");
-        contextKickBtnEl.title = "You are not the owner of this server.";
-    } else {
-        contextKickBtnEl.classList.remove("disabled");
-        contextKickBtnEl.title = "";
     }
 }
 
