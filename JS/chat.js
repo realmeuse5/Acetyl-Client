@@ -525,7 +525,7 @@ function attachUIListeners() {
 
             // KICK USER LOGIC HERE
 
-            alert(`${targetUser} was kicked from ${serverName}`);
+            alert(`${targetUser} was kicked from #${serverName}`);
 
             hideContextMenu();
         });
