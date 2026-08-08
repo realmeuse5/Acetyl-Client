@@ -522,7 +522,7 @@ function attachUIListeners() {
 
             // KICK USER LOGIC HERE
 
-            console.log(`${targetUser} was kicked from ${contextMenuTargetServer}`);
+            alert(`${targetUser} was kicked from ${contextMenuTargetServer}`);
 
             hideContextMenu();
         });
