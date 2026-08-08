@@ -812,6 +812,12 @@ body {
     color: #ffffff;
 }
 
+.context-menu li.disabled {
+    opacity: 0.5;
+    cursor: default;
+    background-color: transparent;
+}
+
 /* RIGHT SIDEBAR */
 
 #rightSidebar {

@@ -71,6 +71,7 @@ let activeMembersListEl;
 let allMembersListEl;
 let allMembersHeaderEl;
 let contextInviteBtnEl;
+let contextKickBtnEl;
 
 function writeOptions() { return { auth: { uid } }; }
 
@@ -114,6 +115,7 @@ window.onload = async () => {
     allMembersListEl = document.getElementById("allMembersList");
     allMembersHeaderEl = document.getElementById("allMembersHeader");
     contextInviteBtnEl = document.getElementById("contextInvite");
+    contextKickBtnEl = document.getElementById("contextKick");
     await initAuthMode();
 
     if (noAuthMode) {
@@ -499,6 +501,29 @@ function attachUIListeners() {
                 const inviteUrl = `${window.location.origin}/#${contextMenuTargetServer}`;
                 alert(`Invite link:\n${inviteUrl}`);
             }
+            hideContextMenu();
+        });
+    }
+
+    if (contextKickBtnEl) {
+        contextKickBtnEl.addEventListener("click", (e) => {
+            e.stopPropagation();
+
+            if (contextKickBtnEl.classList.contains("disabled")) {
+                e.preventDefault();
+                return;
+            }
+
+            const targetUser = prompt("Enter user to kick:");
+            if (!targetUser) {
+                hideContextMenu();
+                return;
+            }
+
+            // KICK USER LOGIC HERE
+
+            console.log(`${targetUser} was kicked from ${contextMenuTargetServer}`);
+
             hideContextMenu();
         });
     }
@@ -891,13 +916,12 @@ async function createServer() {
 
     const code = Math.random().toString(36).substring(2, 8);
 
-    // Create server
     await set(ref(db, `servers/${code}`), {
         name,
+        createdBy: uid,
         createdAt: Date.now()
     }, writeOptions());
 
-    // Add creator as member
     if (uid) {
         await set(ref(db, `serverMembers/${code}/${uid}`), true, writeOptions());
     }
@@ -905,7 +929,6 @@ async function createServer() {
     addServerToSidebar(code, name);
     switchServer(code);
 
-    // System message
     await push(ref(db, `servers/${code}/messages`), {
         text: `Server created. Your server code is: ${code}`,
         username: "Server Bot",
@@ -915,6 +938,7 @@ async function createServer() {
         isSystem: true
     }, writeOptions());
 }
+
 
 // JOIN SERVER
 async function joinServer() {
@@ -1043,6 +1067,30 @@ function updateNoServersMessage() {
         noServersMsgEl.style.display = "block";
     } else {
         noServersMsgEl.style.display = "none";
+    }
+}
+
+
+// KICK FROM SERVER
+function updateKickButton(serverCode) {
+    if (!contextKickBtnEl) return;
+
+    const server = myServers.find(s => s.code === serverCode);
+
+    if (!server || serverCode === "public" || serverCode === "announcements") {
+        contextKickBtnEl.classList.add("disabled");
+        return;
+    }
+
+    if (!server.createdBy) {
+        contextKickBtnEl.classList.add("disabled");
+        contextKickBtnEl.title = "This server is ownerless so kicking is disabled. Contact @𝙍乇𝘼𝙇𝙈𝙀𝙐𝙎𝙀 to claim ownership.";
+    } else if (server.createdBy !== uid) {
+        contextKickBtnEl.classList.add("disabled");
+        contextKickBtnEl.title = "You are not the owner of this server.";
+    } else {
+        contextKickBtnEl.classList.remove("disabled");
+        contextKickBtnEl.title = "";
     }
 }
 
@@ -1626,6 +1674,7 @@ function showServerContextMenu(e, serverCode) {
     if (serverCode === "public" || serverCode === "announcements") return;
 
     contextMenuTargetServer = serverCode;
+    updateKickButton(serverCode);
     contextMenuEl.classList.remove("hidden");
 
     const menuHeight = contextMenuEl.offsetHeight;
