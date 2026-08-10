@@ -59,6 +59,7 @@ let feedbackFormLinkEl;
 let feedbackFormLink2El;
 let feedbackCategoryEl;
 let feedbackMessageEl;
+let feedbackCharCountEl;
 let submitFeedbackBtnEl;
 let announcementsBtnEl;
 let contextMenuEl;
@@ -103,6 +104,7 @@ window.onload = async () => {
     messageBarEl = document.getElementById("messageBar");
     feedbackCategoryEl = document.getElementById("feedbackCategory");
     feedbackMessageEl = document.getElementById("feedbackMessage");
+    feedbackCharCountEl = document.getElementById("feedbackCharCount");
     submitFeedbackBtnEl = document.getElementById("submitFeedbackBtn");
     announcementsBtnEl = document.getElementById("announcementsBtn");
     contextMenuEl = document.getElementById("serverContextMenu");
@@ -426,6 +428,11 @@ function attachUIListeners() {
     feedbackFormLink2El.addEventListener("click", (e) => {
         e.preventDefault();
         showFeedbackForm();
+    });
+
+    feedbackMessage.addEventListener("input", () => {
+        feedbackCharCount.textContent =
+            `${feedbackMessage.value.length} / 2000`;
     });
 
     submitFeedbackBtnEl.addEventListener("click", submitFeedback);
@@ -1460,7 +1467,10 @@ function displayAnnouncement(msg) {
 
     const timeEl = document.createElement("span");
     timeEl.classList.add("timestamp");
-    timeEl.textContent = new Date(msg.timestamp ?? Date.now()).toLocaleString();
+    timeEl.textContent = new Date(msg.timestamp ?? Date.now()).toLocaleString([], {
+        dateStyle: "short",
+        timeStyle: "short"
+    });
 
     header.appendChild(titleEl);
     header.appendChild(timeEl);

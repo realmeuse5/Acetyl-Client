@@ -90,23 +90,52 @@
                     <p>Acetyl Client source code is released under the <a href="https://github.com/realmeuse5/Acetyl-Client/blob/main/LICENSE.md" target="_blank">PolyForm Noncommercial 1.0.0 License</a>. You can view, audit, and contribute to the repository on <a href="https://github.com/realmeuse5/Acetyl-Client" target="_blank">GitHub</a>.</p>
                     <p><em>Note: This license allows non-commercial use, studying, and personal hosting, but strictly prohibits commercial use or selling. All project branding, logos, trademarks, and custom assets remain fully proprietary.</em></p>
                 </div>
+
                 <div id="feedbackForm" class="hidden">
                     <h1>Submit Feedback</h1>
+                    <p>
+                        Found a bug, have an idea, or need help? Let us know.
+                        Your feedback helps us improve Acetyl.
+                    </p>
 
-                    <label for="feedbackCategory">Category</label><br>
-                    <select id="feedbackCategory" name="feedbackCategory">
-                        <option value="Bug Report">Bug Report</option>
-                        <option value="Feature Request">Feature Request</option>
-                        <option value="Report a User">Report a User</option>
-                        <option value="Ban Appeal">Ban Appeal</option>
-                        <option value="General Feedback">General Feedback</option>
-                        <option value="Other">Other</option>
-                    </select><br>
-                    <label for="feedbackMessage">Details</label>
-                    <textarea id="feedbackMessage" placeholder="Describe the issue or suggestion in detail..."></textarea><br>
-                    <label>Forms are processed by</label><br>
-                    <img src="Assets/firebase.png" alt="Firebase Logo"><br>
-                    <button id="submitFeedbackBtn">Submit</button>
+                    <div class="feedbackFields">
+
+                        <div class="feedbackField">
+                            <label for="feedbackCategory">What is this about?</label>
+                            <select id="feedbackCategory" name="feedbackCategory" required>
+                                <option value="Bug Report">Bug Report</option>
+                                <option value="Feature Request">Feature Request</option>
+                                <option value="Report a User">Report a User</option>
+                                <option value="Ban Appeal">Ban Appeal</option>
+                                <option value="General Feedback">General Feedback</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+
+                        <div class="feedbackField">
+                            <div class="labelRow">
+                                <label for="feedbackMessage">Details</label>
+                                <span id="feedbackCharCount">0 / 2000</span>
+                            </div>
+
+                            <textarea
+                                id="feedbackMessage"
+                                name="feedbackMessage"
+                                maxlength="2000"
+                                placeholder="Tell us what happened, what you'd like to see changed, or anything else we should know..."
+                            ></textarea>
+                        </div>
+
+                    </div>
+
+                    <div class="feedbackSubmit">
+                        <span>Thanks for helping improve Acetyl</span>
+                        <button id="submitFeedbackBtn" type="button">
+                            Submit Feedback
+                            <span class="submitArrow">></span>
+                        </button>
+                    </div>
+                    
                 </div>
                 <div id="feedbackViewer" class="hidden"></div>
             </div>
