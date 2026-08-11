@@ -1,17 +1,9 @@
 // IMPORTS
 import { db, auth, noAuthMode, initAuthMode } from "./firebase-init.js";
 import { 
-    ref, 
-    push, 
-    onChildAdded, 
-    onChildRemoved, 
-    onChildChanged, 
-    remove, 
-    get, 
-    child, 
-    set,
-    onDisconnect,
-    onValue
+    ref, push, onChildAdded, onChildRemoved, onChildChanged, 
+    remove, get, child, set, onDisconnect, onValue,
+    serverTimestamp, query, orderByChild
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
 
@@ -667,10 +659,13 @@ async function switchServer(serverId) {
         if (unsubscribe) unsubscribe();
 
         messagesRef = ref(db, "servers/announcements/messages");
+        
+        const announcementsQuery = query(messagesRef, orderByChild("timestamp"));
+        
         messagesListEl.innerHTML = "";
         lastMessage = null;
 
-        unsubscribe = onChildAdded(messagesRef, (snap) => {
+        unsubscribe = onChildAdded(announcementsQuery, (snap) => {
             const msg = snap.val();
             displayAnnouncement(msg);
         });
@@ -711,10 +706,13 @@ async function switchServer(serverId) {
     }
 
     messagesRef = ref(db, `servers/${serverId}/messages`);
+    
+    const messagesQuery = query(messagesRef, orderByChild("timestamp"));
+    
     messagesListEl.innerHTML = "";
     lastMessage = null;
 
-    unsubscribe = onChildAdded(messagesRef, (snap) => {
+    unsubscribe = onChildAdded(messagesQuery, (snap) => {
         const msg = snap.val();
 
         if (msg.isDM) {
@@ -722,7 +720,7 @@ async function switchServer(serverId) {
             const isReceiver = msg.dmToUid === uid;
 
             if (!isSender && !isReceiver) {
-                return; // hide DM from everyone else
+                return; 
             }
         }
 
@@ -1202,7 +1200,7 @@ async function sendMessage() {
             text: text || null,
             username,
             uid: uid || "no-auth",
-            timestamp: Date.now(),
+            timestamp: serverTimestamp(),
             isAdmin: isAdmin || false,
             fileUrl,
             fileName,
