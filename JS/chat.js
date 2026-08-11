@@ -879,14 +879,8 @@ async function loadFeedback() {
                     <span class="feedback-category">${fb.category.toUpperCase()}</span>
                     <span class="feedback-timestamp">${date}</span>
                 </div>
-
-                <div class="feedback-body">
-                    ${fb.message}
-                </div>
-
-                <div class="feedback-footer">
-                    Submitted by: ${fb.username}
-                </div>
+                <div class="feedback-body">${fb.message}</div>
+                <div class="feedback-footer">Submitted by: ${fb.username}</div>
             </div>
         `;
     });

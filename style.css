@@ -129,10 +129,16 @@ body {
     background: none;
     color: #ffffff;
     font-family: "DM Sans", sans-serif;
-    width: 95%;
-    overflow-x: auto;
-    flex-shrink: 0;
+    flex: 1 1 0;
+    min-width: 0;
+    width: 0;
     box-sizing: border-box;
+    resize: none;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    overflow-x: hidden;
+    overflow-y: auto;
+    max-height: 60px;
     max-height: 60px;
 }
 
@@ -604,10 +610,12 @@ body {
     margin-left: 0;
     width: 100%;
     max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
     display: flex;
     flex-direction: column;
     word-wrap: break-word;
-    overflow-wrap: break-word;
+    overflow-wrap: anywhere;
     white-space: pre-wrap;
     overflow: hidden;
 }
@@ -680,9 +688,10 @@ body {
     color: #ffffff;
     font-size: 1.3rem;
     word-wrap: break-word;
-    overflow-wrap: break-word;
+    overflow-wrap: anywhere;
     white-space: pre-wrap;
     margin-left: 20px;
+    min-width: 0;
 }
 
 .timestamp {
@@ -772,6 +781,15 @@ body {
     margin-left: 0;
     width: 100%;
     max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+
+    display: flex;
+    flex-direction: column;
+
+    word-wrap: break-word;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
     overflow: hidden;
 }
 
@@ -795,18 +813,20 @@ body {
     margin-left: 20px;
 }
 
-.feedback-timestamp {
-    font-size: 0.8rem;
-    color: #96979e;
-    margin-left: 10px;
-}
-
 .feedback-body {
     color: #ffffff;
     font-size: 1.3rem;
     word-wrap: break-word;
-    overflow-wrap: break-word;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
     margin-left: 20px;
+    min-width: 0;
+}
+
+.feedback-timestamp {
+    font-size: 0.8rem;
+    color: #96979e;
+    margin-left: 10px;
 }
 
 .feedback-footer {
