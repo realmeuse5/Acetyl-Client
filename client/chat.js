@@ -497,7 +497,7 @@ function attachUIListeners() {
         contextInviteBtnEl.addEventListener("click", (e) => {
             e.stopPropagation();
             if (contextMenuTargetServer) {
-                const inviteUrl = `${window.location.origin}/app/#${contextMenuTargetServer}`;
+                const inviteUrl = `${window.location.origin}/client/#${contextMenuTargetServer}`;
                 alert(`Invite link:\n${inviteUrl}`);
             }
             hideContextMenu();
