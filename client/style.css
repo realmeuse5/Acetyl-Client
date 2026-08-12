@@ -54,12 +54,49 @@ body {
 #banned {
     display: none;
     text-align: center;
-    color: #96979e;
-    font-size: 2rem;
     position: fixed;
     top: 50%;              
     left: 50%;              
     transform: translate(-50%, -50%); 
+    background-color: #222327;  
+    border-radius: 8px;
+    width: 40%;
+    padding: 0;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+}
+
+#banned img {
+    height: 100px;
+    width: 100px;
+    margin-top: 20px;
+}
+
+#banned h1 {
+    font-family: "DM Sans", sans-serif;
+    font-size: 2rem;
+    color: #ffffff;
+    margin-bottom: 0;
+}
+
+#banned h1 span {
+    background: linear-gradient(90deg, #4E00CA, #FF0044);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: transparent;
+    font-family: "Cal Sans", sans-serif;
+}
+
+#banned p {
+    font-family: "DM Sans", sans-serif;
+    font-size: 1rem;
+    color: #96979e;
+    margin-bottom: 20px;
+    padding: 20px 30px;
+    margin-top: 0;
+}
+
+#banned p span {
+    color: #fff;
 }
 
 #webContainer {

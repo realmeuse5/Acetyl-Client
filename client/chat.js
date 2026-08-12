@@ -38,6 +38,7 @@ let attachedFileLabelEl;
 let publicServerBtnEl;
 let createServerBtnEl;
 let joinServerBtnEl;
+let bannedEl;
 let bannedMsgEl;
 let webContainerEl;
 let guidelinesBtnEl;
@@ -83,7 +84,8 @@ window.onload = async () => {
     createServerBtnEl = document.getElementById("createServerBtn");
     joinServerBtnEl = document.getElementById("joinServerBtn");
     attachedFileLabelEl = document.getElementById("attachedFileLabel");
-    bannedMsgEl = document.getElementById("banned");
+    bannedEl = document.getElementById("banned");
+    bannedMsgEl = document.getElementById("bannedMsg");
     webContainerEl = document.getElementById("webContainer");
     guidelinesBtnEl = document.getElementById("guidelinesBtn");
     chatContainerEl = document.getElementById("chatContainer");
@@ -602,7 +604,7 @@ async function checkBanStatus(userUid) {
         if (!banSnap.exists()) {
             // Not banned
             webContainerEl.style.display = "flex";
-            bannedMsgEl.style.display = "none";
+            bannedEl.style.display = "none";
             return;
         }
 
@@ -615,26 +617,27 @@ async function checkBanStatus(userUid) {
             if (remainingMs > 0) {
                 const remainingMinutes = Math.floor(remainingMs / 60000);
                 bannedMsgEl.innerHTML = `
-                    You have been banned<br>
-                    Reason: ${banData.reason || "unspecified"}<br>
-                    Remaining time: ${remainingMinutes} minutes
+                    Due to community guideline violations, you have been banned by an admin.<br>
+                    Reason: <span>${banData.reason || "unspecified"}</span><br>
+                    Remaining time: <span>${remainingMinutes} minutes</span><br>
+                    If you believe this is a mistake or want to appeal, please contact us at <span>support@acetyl.cc</span>
                 `;
                 webContainerEl.style.display = "none";
-                bannedMsgEl.style.display = "block";
+                bannedEl.style.display = "block";
             } else {
                 // Ban expired
                 remove(banRef);
                 webContainerEl.style.display = "flex";
-                bannedMsgEl.style.display = "none";
+                bannedEl.style.display = "none";
             }
         } else {
             // Permanent ban
             bannedMsgEl.innerHTML = `
-                You have been banned<br>
+                You have been permanently banned and have lost access to Acetyl Client.<br>
                 Reason: ${banData.reason || "unspecified"}
             `;
             webContainerEl.style.display = "none";
-            bannedMsgEl.style.display = "block";
+            bannedEl.style.display = "block";
         }
     });
 }
