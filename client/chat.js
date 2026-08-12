@@ -146,9 +146,11 @@ async function finishAppLoad() {
         alert(
             "Welcome! Since this is your first time using Acetyl Client, " +
             "please take a moment to read the Community Guidelines. " +
-            "After that, you can head to the Public server and start chatting." +
+            "After that, you can head to the Public server and start chatting. " +
             "Note: Acetyl is designed for personal and community use. Some schools restrict chat apps, so please follow your school’s technology policies."
         );
+        await set(ref(db, `users/${uid}/username`), username, writeOptions());
+        localStorage.setItem("username", username);
         showGuidelines();
     } else {
         const handledInvite = await handleInvite();
@@ -191,8 +193,6 @@ async function loadSavedUser(currentUid) {
     username = `user${num}`;
     usernameEl.textContent = username;
 
-    await set(userRef, username, writeOptions());
-    localStorage.setItem("username", username);
     return true;
 }
 
