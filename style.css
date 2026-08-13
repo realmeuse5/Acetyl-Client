@@ -1,0 +1,97 @@
+html {
+    font-family: "DM Sans", sans-serif;
+    margin: 0;
+    padding: 0;
+    background: #000;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    background: linear-gradient(to top, #000000 0%, #121214 70%, #121214 100%);
+}
+
+#header {
+    position: sticky;
+    top: 0;
+    left: 0;
+    width: 100%;
+    z-index: 1000;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    height: 7vh;
+    border-bottom: #29292d 1px solid;
+    background-color: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(16px) saturate(180%);
+    -webkit-backdrop-filter: blur(16px) saturate(180%);
+}
+
+#header img {
+    height: 40px;
+    margin-left: 15px;
+    cursor: pointer
+}
+
+#header h1 {
+    font-family: "Cal Sans", sans-serif;
+    margin-left: 10px;
+    font-size: 1.8rem;
+    color: white;
+    margin-right: 40px;
+    cursor: pointer
+}
+
+#header h2 {
+    font-family: 'DM Sans', sans-serif;
+    margin-right: 30px;
+    font-size: 0.9rem;
+    font-weight: 400;
+    cursor: pointer;
+    background: linear-gradient(90deg, #96979e 50%, #fff 50%);
+    background-size: 200% 100%;
+    background-position: 100% 0; 
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    transition: background-position 0.3s ease;
+}
+
+#header h2:hover {
+    background-position: 0% 0;
+}
+
+#section-1 {
+    height: 50vh;
+    padding: 20px 40px;
+    line-height: 0.7;
+}
+
+#section-1 h2 {
+    font-family: 'DM Sans', sans-serif;
+    color: #fff;
+    font-size: 3rem;
+}
+
+#section-1 h1 {
+    font-family: 'Cal Sans', sans-serif;
+    color: #fff;
+    font-size: 6rem;
+}
+
+#section-1 h1 span {
+    background: linear-gradient(90deg, #4E00CA, #FF0044);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    white-space: pre-wrap;
+    
+    border-right: 3px solid #FF0044;
+    padding-right: 4px;
+    animation: blink-cursor 0.75s step-end infinite;
+}
+
+@keyframes blink-cursor {
+    from, to { border-color: transparent; }
+    50% { border-color: #FF0044; }
+}
