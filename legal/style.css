@@ -1,0 +1,49 @@
+#content {
+    max-width: 850px;
+    margin: 60px auto;
+    padding: 0 24px;
+}
+
+#legal-title {
+    padding-bottom: 20px;
+}
+
+h1 {
+    font-family: 'Cal Sans', sans-serif;
+    font-size: 2.5rem;
+    color: white;
+}
+
+h2 {
+    font-family: 'DM Sans', sans-serif;
+    color: white;
+    font-size: 1.5rem;
+}
+
+p {
+    color: #96979e;
+    font-size: 1rem;
+}
+
+a {
+    color: #96979e;
+    background: linear-gradient(90deg, #fff 50%, #96979e 50%);
+    background-size: 200% 100%;
+    background-position: 100% 0; 
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    transition: background-position 1s ease;
+    font-size: 1rem;
+    cursor: pointer;
+}
+
+a:hover {
+    background-position: 0% 0;
+}
+
+.legal-section {
+    padding-top: 10px;
+    border-top: #29292d 1px solid;
+    padding-bottom: 30px;
+}
