@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>Acetyl | Support</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cal+Sans&family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/svg+xml" href="/client/Assets/favicon.svg">
+    
+    <link rel="stylesheet" href="/components/global.css">
+    <link rel="stylesheet" href="style.css">    
+    <script src="/components/components.js" defer></script>
+</head>
+<body>
+    <div id="header"></div>
+
+    <div id="content">
+        <div id="support-title">
+            <h1>Support & Contact Page</h1>
+            <p>If you need help, have a question, or want to reach out, use one of the contact options below.</p>
+        </div>
+
+        <div id="support-methods">
+            <div class="support-section">
+                <h2><i class="fa-solid fa-comments"></i>&ensp;Message an Admin</h2>
+                <p>If you have the Acetyl Client open and are able to chat, you can contact an administrator directly inside the client. To send a direct message, format your message starting with <code>@username,</code> followed by a space and your message (ensure you include the comma after the username).</p>
+                <p>Active admins:</p>
+                <div id="admins">
+                    <div class="admin"><span>𝙍乇𝘼𝙇𝙈𝙀𝙐𝙎𝙀</span>&ensp;<i class="fa-solid fa-circle-check admin-badge"></i></div>
+                    <div class="admin"><span>User 🯰</span>&ensp;<i class="fa-solid fa-circle-check admin-badge"></i></div>
+                    <div class="admin"><span>Trueb0t</span>&ensp;<i class="fa-solid fa-circle-check admin-badge"></i></div>
+                </div>
+            </div>
+            <div class="support-section">
+                <h2><i class="fa-solid fa-envelope"></i>&ensp;Email Support</h2>
+                <p>For account issues, ban appeals, or inquiries that cannot be handled through in-app chat, write to us directly at <a href="mailto:support@acetyl.cc">support@acetyl.cc</a>. Please include your current username and any relevant details so we can assist you.</p>
+            </div>
+            <div class="support-section">
+                <h2><i class="fa-solid fa-message"></i>&ensp;Feedback Form</h2>
+                <p>If you want to suggest a feature, share general thoughts, or report a visual or technical bug, submit it via our Feedback Form. Reports submitted here go directly to admins and are high priority. To access the feedback form, go to the chat client: <a href="/client">acetyl.cc/client</a>, and click on the #guidelines page. Then scroll to the bottom and click on the 'Feedback Form' link.</p>
+            </div>
+        </div>
+        <div id="faq">
+            <h2>Frequently Asked Questions</h2>
+
+            <div class="faq-item">
+                <button class="faq-question">
+                    How do I change my username?
+                    <i class="fa-solid fa-chevron-down faq-icon"></i>
+                </button>
+                <div class="faq-answer">
+                    Click on your username in the top left.
+                </div>
+            </div>
+            <div class="faq-item">
+                <button class="faq-question">
+                    How do I send a direct message?
+                    <i class="fa-solid fa-chevron-down faq-icon"></i>
+                </button>
+                <div class="faq-answer">
+                    To send a private message to another user or administrator, start your message with <code>@username,</code> followed by your text.
+                </div>
+            </div>
+            <div class="faq-item">
+                <button class="faq-question">
+                    What if I get wrongly banned?
+                    <i class="fa-solid fa-chevron-down faq-icon"></i>
+                </button>
+                <div class="faq-answer">
+                    Send an appeal email to support@acetyl.cc with your username and details regarding the incident. An administrator will review your case. 
+                </div>
+            </div>
+            <div class="faq-item">
+                <button class="faq-question">
+                    What if Acetyl is blocked on my school or network?
+                    <i class="fa-solid fa-chevron-down faq-icon"></i>
+                </button>
+                <div class="faq-answer">
+                    Have fun 👍
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="footer"></div>
+
+    <script>
+        document.querySelectorAll('.faq-question').forEach(button => {
+            button.addEventListener('click', () => {
+                const item = button.parentElement;
+                item.classList.toggle('active');
+            });
+        });
+    </script>
+    
+</body>
+</html>

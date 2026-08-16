@@ -1,0 +1,134 @@
+#content {
+    max-width: 850px;
+    margin: 60px auto;
+    padding: 0 24px;
+}
+
+#support-title {
+    padding-bottom: 20px;
+}
+
+h1 {
+    font-family: 'Cal Sans', sans-serif;
+    font-size: 2.5rem;
+    color: white;
+}
+
+h2 {
+    font-family: 'DM Sans', sans-serif;
+    color: white;
+    font-size: 1.5rem;
+}
+
+p {
+    color: #96979e;
+    font-size: 1rem;
+}
+
+code {
+    background-color: #222327;
+    padding: 1px 3px;
+    border-radius: 5px;
+}
+
+a {
+    color: #96979e;
+    background: linear-gradient(90deg, #fff 50%, #96979e 50%);
+    background-size: 200% 100%;
+    background-position: 100% 0; 
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    transition: background-position 1s ease;
+    font-size: 1rem;
+    cursor: pointer;
+}
+
+a:hover {
+    background-position: 0% 0;
+}
+
+#support-methods {
+    border-bottom: #29292d 1px solid;
+    padding-bottom: 10px;
+}
+
+.support-section {
+    padding-top: 10px;
+    padding-bottom: 30px;
+}
+
+#admins {
+    display: flex;
+    flex-direction: row;
+    gap: 20px
+}
+
+.admin {
+    color: #96979e;
+    background-color: #121214;
+    padding: 5px 10px;
+    border-radius: 5px;
+    border: #29292d 1px solid;
+}
+
+.admin span {
+    background: linear-gradient(90deg, #4E00CA, #FF0044);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: transparent;
+    font-weight: 600;
+}
+
+i {
+    color: #96979e
+}
+
+#faq {
+    padding-top: 30px;
+}
+
+.faq-item {
+    background: #121214;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    overflow: hidden;
+}
+
+.faq-question {
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: none;
+    padding: 18px 20px;
+    color: #ffffff;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-family: 'DM Sans';
+}
+
+.faq-answer {
+    padding: 0 20px 18px;
+    color: #96979e;
+    font-size: 1rem;
+    display: none;
+    font-family: 'DM Sans';
+}
+
+.faq-item.active .faq-answer {
+    display: block;
+}
+
+.faq-item.active .faq-icon {
+    transform: rotate(180deg);
+}
+
+.faq-icon {
+    transition: transform 0.2s ease;
+    color: #96979e;
+}
+
