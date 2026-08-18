@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Acetyl | Pricing</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cal+Sans&family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/svg+xml" href="/client/Assets/favicon.svg">
+    
+    <link rel="stylesheet" href="/components/global.css">
+    <link rel="stylesheet" href="style.css">    
+    <script src="/components/components.js" defer></script>
+</head>
+<body>
+    <div id="header"></div>
+
+    <div id="content">
+        <div id="pricing-title">
+            <h1>Pricing</h1>
+            <p>Pick your favorite one. If you attempt to pay us, your money will be ignored.</p>
+        </div>
+        <div id="pricing-grid">
+            <div class="tier">
+                <h2 class="tier-title">Basic</h2>
+                <div class="tier-price">$0.00</div>
+                <ul class="feature-list">
+                    <li>Basic features (they're all basic)</li>
+                    <li>No premium support (you're on your own)</li>
+                    <li>No hidden fees (i dont have the time to add them)</li>
+                    <li>Community Guidelines access (you get to read them)</li>
+                </ul>
+                <button onclick="window.location.href='/client'" class="btn">Get Basic</button>
+            </div>
+            <div class="tier">
+                <h2 class="tier-title">Plus</h2>
+                <div class="tier-price">$0.00</div>
+                <ul class="feature-list">
+                    <li>All free features (still basic)</li>
+                    <li>Premium support (we might answer)</li>
+                    <li>This is the most boring tier of all pls stop reading this</li>
+                </ul>
+                <button onclick="window.location.href='/client'" class="btn">Get Plus</button>
+            </div>
+            <div class="tier pro">
+                <h2 class="tier-title">Pro (most popular)</h2>
+                <div class="tier-price">$0.00</div>
+                <ul class="feature-list">
+                    <li>We dont hide any features from you</li>
+                    <li>Server creation (make up to 5 private servers)</li>
+                    <li>10 MB file attachments</li>
+                    <li>Reliable support (contact via email, feedback form, etc)</li>
+                    <li>Voicechat, DMs, invite links, and more...</li>
+                </ul>
+                <button onclick="window.location.href='/client'" class="btn btn-pro">Get Pro</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="footer"></div>
+</body>
+</html>

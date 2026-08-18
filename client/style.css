@@ -49,6 +49,10 @@ body {
     cursor: pointer;
 }
 
+a {
+    text-decoration: none;
+}
+
 /* MAIN CONTENT */
 
 #banned {

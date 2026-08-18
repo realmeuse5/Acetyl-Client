@@ -136,3 +136,7 @@ body {
 .footer-list a:hover {
     background-position: 0% 0;
 }
+
+a {
+    text-decoration: none;
+}

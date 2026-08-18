@@ -1,0 +1,125 @@
+#content {
+    flex: 1;
+    max-width: 1050px;
+    margin: 40px auto;
+    padding: 0 24px;
+    width: 100%;
+}
+
+#pricing-title {
+    margin-bottom: 40px;
+}
+
+#pricing-title h1 {
+    font-family: 'Cal Sans', sans-serif;
+    font-size: 3rem;
+    color: white;
+    margin-bottom: 8px;
+}
+
+#pricing-title p {
+    color: #96979e;
+    font-size: 1.1rem;
+}
+
+#pricing-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 24px;
+    align-items: stretch;
+}
+
+.tier {
+    background-color: #121214;
+    border: 1px solid transparent;  
+    border-radius: 16px;
+    padding: 32px 24px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    position: relative;
+    transition: transform 0.2s ease
+}
+
+.tier:hover {
+    border-color: #29292d;
+    transform: scale(1.02);
+}
+
+.tier.pro {
+    border: 2px solid transparent; 
+    background-image: 
+        linear-gradient(#121214, #121214), 
+        linear-gradient(135deg, #4E00CA, #FF0044);
+    background-origin: border-box;
+    background-clip: padding-box, border-box;
+    box-shadow: 0 0 30px rgba(78, 0, 202, 0.2);
+}
+
+h2.tier-title {
+    font-family: 'Cal Sans', sans-serif;
+    font-size: 2rem;
+    color: white;
+    margin-bottom: 10px;
+    margin-top: 0;
+}
+
+.tier-price {
+    font-family: 'Cal Sans', sans-serif;
+    font-size: 3.5rem;
+    color: #ffffff;
+    margin-bottom: 24px;
+    line-height: 1;
+}
+
+.feature-list {
+    list-style: none;
+    margin-bottom: 32px;
+    flex-grow: 1;
+    padding: 0;
+}
+
+li {
+    font-size: 1rem;
+    color: #96979e;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+li::before {
+    content: "✓";
+    color: #ffffff;
+}
+
+button {
+    display: block;
+    text-align: center;
+    width: 100%;
+    padding: 10px;
+    border-radius: 8px;
+    background-color: #1a1a1e;
+    color: #ffffff;
+    font-family: 'DM Sans', sans-serif;
+    border: none;
+    font-size: 1rem;
+    cursor: pointer;
+}
+
+button:hover {
+    background-color: #2c2c30; 
+}
+
+button.btn-pro {
+    background: linear-gradient(90deg, #4E00CA 0%, #FF0044 50%, #4E00CA 100%);
+    color: #ffffff;
+    background-size: 200% 100%;
+    background-position: 0% 0%;
+    transition: background-position 0.4s ease;
+    text-align: center;
+}
+
+button.btn-pro:hover {
+    background-position: 100% 0%;
+}
