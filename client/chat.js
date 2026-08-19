@@ -66,6 +66,7 @@ let allMembersListEl;
 let allMembersHeaderEl;
 let contextInviteBtnEl;
 let contextKickBtnEl;
+let newMessage;
 
 function writeOptions() { return { auth: { uid } }; }
 
@@ -112,6 +113,7 @@ window.onload = async () => {
     allMembersHeaderEl = document.getElementById("allMembersHeader");
     contextInviteBtnEl = document.getElementById("contextInvite");
     contextKickBtnEl = document.getElementById("contextKick");
+    newMessage = new Audio('/client/Assets/newMessage.mp3')
     await initAuthMode();
 
     if (noAuthMode) {
@@ -1641,14 +1643,33 @@ function isTabActive() {
 }
 
 function maybeNotify(msg, serverId) {
-    if (isTabActive()) return;
     if (msg.uid === uid) return;
     if (msg.isSystem) return;
+    if (msg.isDM && msg.dmToUid !== uid && msg.uid !== uid) return;
 
-    const title = `${msg.username} sent a message`;
-    const body = `on server ${serverId}`;
+    if (isTabActive() && serverId === currentServer) return;
 
-    new Notification(title, { body });
+    if (newMessage) {
+        newMessage.currentTime = 0;
+        newMessage.play().catch(err => {
+            console.warn("Autoplay blocked sound until first user interaction:", err);
+        });
+    }
+
+    if (!isTabActive() && Notification.permission === "granted") {
+        let serverName = serverId;
+        if (serverId === "public") serverName = "public";
+        else if (serverId === "announcements") serverName = "announcements";
+        else {
+            const found = myServers.find(s => s.code === serverId);
+            if (found) serverName = found.name;
+        }
+
+        const title = `${msg.username} sent a message`;
+        const body = `on #${serverName}`;
+
+        new Notification(title, { body });
+    }
 }
 
 const notificationUnsubs = {};
@@ -1658,6 +1679,7 @@ function setupNotificationListener(serverId) {
     if (notificationUnsubs[serverId]) return;
 
     const refMessages = ref(db, `servers/${serverId}/messages`);
+    let isInitialNotificationLoad = true;
     
     notificationUnsubs[serverId] = onChildAdded(refMessages, (snapshot) => {
         const msg = snapshot.val();
@@ -1680,10 +1702,16 @@ function setupNotificationListener(serverId) {
                     badge.style.display = "inline-block";
                 }
             }
-        }
 
-        maybeNotify(msg, serverId);
+            if (!isInitialNotificationLoad) {
+                maybeNotify(msg, serverId);
+            }
+        }
     });
+
+    onValue(refMessages, () => {
+        isInitialNotificationLoad = false;
+    }, { onlyOnce: true });
 }
 
 function showServerContextMenu(e, serverCode) {
