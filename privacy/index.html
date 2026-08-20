@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>Acetyl | Privacy Policy</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cal+Sans&family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/svg+xml" href="/client/Assets/favicon.svg">
+    
+    <link rel="stylesheet" href="/components/global.css">
+    <link rel="stylesheet" href="style.css">    
+    <script src="/components/components.js" defer></script>
+</head>
+<body>
+    <div id="header"></div>
+
+    <div id="content">
+        <div id="title">
+            <h1>Acetyl's Privacy Policy</h1>
+            <p>Last updated: August 2026</p>
+        </div>
+
+        <div class="section">
+            <p>This Privacy Policy explains how Acetyl (“the Service”) collects, uses, and safeguards information when you use our chat client. By accessing or using the Service, you agree to the data practices described in this policy.</p>
+            <h2>1. Information We Collect</h2>
+            <p><strong>Account & Session Identifiers.</strong> When you access the Service, authentication generates or assigns a unique User Identifier (UID). Depending on your connection mode, this UID is either managed via Firebase Authentication or assigned locally. Your chosen or auto-generated username is stored in our database and linked to your UID.</p>
+            <p><strong>User Messages & Uploaded Assets.</strong> Messages, direct messages (DMs), and file attachments transmitted across servers are processed and stored in our Firebase Realtime Database. Files and images uploaded using the client attachment tool are stored on our dedicated media server.</p>
+            <p><strong>Moderation & Ban Logs.</strong> If an account is suspended or banned, we record administrative audit data—including your assigned UID, username, ban reason, duration, timestamp, and reviewing administrator—to enforce access restrictions and maintain platform security.</p>
+            <p><strong>Local Client Storage.</strong> We utilize browser local storage to retain your active server subscriptions, read-state timestamps, local session flags, and username settings across page refreshes.</p>
+        </div>
+        <div class="section">
+            <h2>2. How We Use Information</h2>
+            <p><strong>Service Operation.</strong> We use collected data strictly to deliver real-time chat functionality, process media uploads, manage channel routing, and enable messaging between users.</p>
+            <p><strong>Moderation & Security.</strong> Information is processed to enforce our Terms of Service and Community Guidelines, maintain administrative audit trails, prevent automated spam or rate-limit abuse, and manage ban enforcement.</p>
+            <p><strong>System Performance.</strong> Technical logs and error responses are used to troubleshoot backend database connectivity, file upload pipelines, and client rendering performance.</p>
+        </div>
+        <div class="section">
+            <h2>3. Data Sharing & Third-Party Infrastructure</h2>
+            <p><strong>No Commercial Sale.</strong> We do not sell, rent, or trade your personal data, interaction history, or user identifiers to third-party advertisers or data brokers.</p>
+            <p><strong>Infrastructure Service Providers.</strong> The Service relies on trusted third-party cloud infrastructure to operate. Your data is processed through Firebase (Google LLC) for database and authentication services, Render (Render Services, Inc.) for file hosting, and Cloudflare (Cloudflare, Inc.) for network routing and security.</p>
+            <p><strong>Legal & Administrative Disclosure.</strong> Data may be disclosed if required by valid law enforcement requests, legal process, or to protect the safety, rights, and security of our users and infrastructure.</p>
+        </div>
+        <div class="section">
+            <h2>4. Data Retention & Automatic Deletion</h2>
+            <p><strong>Message Rotation & Deletion.</strong> To maintain server performance and database optimization, channels enforce message capacity limits. When a channel exceeds its message limit, older messages and associated media files on the file server are subject to automatic, permanent deletion.</p>
+            <p><strong>Ban Records.</strong> Moderation audit records are retained for the duration of an active ban and may persist in administrative security logs to prevent ban evasion.</p>
+            <p><strong>Local Storage Clearing.</strong> You may clear your browser’s local storage or application data at any time to remove locally cached server lists and session state from your device.</p>
+        </div>
+        <div class="section">
+            <h2>5. Security & Your Rights</h2>
+            <p><strong>Security Measures.</strong> We implement Firebase Realtime Database security rules and access controls to protect your transmissions. However, no internet transmission or electronic storage system is 100% secure, and you use the Service at your own risk.</p>
+            <p><strong>Data Access & Rights.</strong> You may inquire about the data linked to your active UID or request manual administrative removal of expired user entries by contacting our support team.</p>
+            <p><strong>Children's Privacy.</strong> The Service is not directed to individuals under 13 years of age (or the minimum legal age in your jurisdiction). We do not knowingly collect personal data from children under 13.</p>
+        </div>
+        <div class="section">
+            <h2>6. Policy Updates & Contact Information</h2>
+            <p><strong>Changes to This Policy.</strong> We reserve the right to update this Privacy Policy from time to time. Revised versions will be published directly within the Service client and take effect immediately upon posting.</p>
+            <p><strong>Contact Us.</strong> For privacy questions, data inquiries, or account removal requests, please email our support team at support@acetyl.cc or submit an inquiry through the in-app feedback form (available in the chat client).</p>
+        </div>
+    </div>
+
+    <div id="footer"></div>
+</body>
+</html>
