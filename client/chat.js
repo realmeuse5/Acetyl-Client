@@ -257,12 +257,22 @@ async function validateSavedServers() {
         const snapshot = await get(serverRef);
 
         if (snapshot.exists()) {
-            validServers.push({ code, name });
-        } else {
-            console.log(`Removing deleted server: ${code}`);
-            if (uid) {
-                await remove(ref(db, `serverMembers/${code}/${uid}`), writeOptions());
+            const serverData = snapshot.val();
+            const memberRef = ref(db, `servers/${code}/members/${uid}`);
+            const memberSnap = await get(memberRef);
+
+            if (!memberSnap.exists() && uid) {
+                console.log(`Migrating membership for server: ${code}`);
+                await set(memberRef, true, writeOptions());
+                validServers.push({ code, name });
+            } else if (memberSnap.exists() || (serverData && serverData.createdBy === uid)) {
+                validServers.push({ code, name });
+            } else {
+                console.log(`User is no longer a member of server: ${code}`);
+                await remove(ref(db, `servers/${code}/activeUsers/${uid}`), writeOptions());
             }
+        } else {
+            console.log(`Removing deleted server record: ${code}`);
         }
     }
 
@@ -509,7 +519,7 @@ function attachUIListeners() {
     }
 
     if (contextKickBtnEl) {
-        contextKickBtnEl.addEventListener("click", (e) => {
+        contextKickBtnEl.addEventListener("click", async (e) => {
             e.stopPropagation();
 
             if (contextKickBtnEl.classList.contains("disabled")) {
@@ -523,12 +533,44 @@ function attachUIListeners() {
                 return;
             }
 
+            const targetName = targetUser.trim();
+            if (targetName === username) {
+                alert("You cannot kick yourself. Use 'Leave Server' instead.");
+                hideContextMenu();
+                return;
+            }
+
             const server = myServers.find(s => s.code === contextMenuTargetServer);
             const serverName = server ? server.name : contextMenuTargetServer;
 
-            // KICK USER LOGIC HERE
+            try {
+                const usersSnap = await get(ref(db, "users"));
+                let targetUid = null;
 
-            alert(`${targetUser} was kicked from #${serverName}`);
+                if (usersSnap.exists()) {
+                    const users = usersSnap.val();
+                    for (const uidKey in users) {
+                        if (users[uidKey].username === targetName) {
+                            targetUid = uidKey;
+                            break;
+                        }
+                    }
+                }
+
+                if (!targetUid) {
+                    alert(`User @${targetName} was not found.`);
+                    hideContextMenu();
+                    return;
+                }
+
+                await remove(ref(db, `servers/${contextMenuTargetServer}/members/${targetUid}`), writeOptions());
+                await remove(ref(db, `servers/${contextMenuTargetServer}/activeUsers/${targetUid}`), writeOptions());
+
+                alert(`${targetName} was kicked from #${serverName}`);
+            } catch (err) {
+                console.error("Kick failed:", err);
+                alert("Failed to kick user.");
+            }
 
             hideContextMenu();
         });
@@ -930,7 +972,7 @@ async function createServer() {
     }, writeOptions());
 
     if (uid) {
-        await set(ref(db, `serverMembers/${code}/${uid}`), true, writeOptions());
+        await set(ref(db, `servers/${code}/members/${uid}`), true, writeOptions());
     }
 
     addServerToSidebar(code, name);
@@ -977,7 +1019,7 @@ async function joinServer() {
     }
 
     if (uid) {
-        await set(ref(db, `serverMembers/${code}/${uid}`), true, writeOptions());
+        await set(ref(db, `servers/${code}/members/${uid}`), true, writeOptions());
     }
 
     addServerToSidebar(code, name);
@@ -1047,18 +1089,17 @@ async function leaveServer(code) {
     const row = [...serverListEl.children].find(r => r.dataset.server === code);
     if (row) row.remove();
 
-    const membersRef = ref(db, `serverMembers/${code}`);
+    const membersRef = ref(db, `servers/${code}/members`);
     const membersSnap = await get(membersRef);
     const members = membersSnap.exists() ? Object.keys(membersSnap.val()) : [];
-    const isLastMember = members.length === 1 && members[0] === uid;
+    const isLastMember = members.length === 0 || (members.length === 1 && members[0] === uid);
 
     if (isLastMember) {
         await remove(ref(db, `servers/${code}`), writeOptions());
-        await remove(ref(db, `serverMembers/${code}`), writeOptions());
+    } else {
+        await remove(ref(db, `servers/${code}/activeUsers/${uid}`), writeOptions());
+        await remove(ref(db, `servers/${code}/members/${uid}`), writeOptions());
     }
-
-    await remove(ref(db, `servers/${code}/activeUsers/${uid}`), writeOptions());
-    await remove(ref(db, `serverMembers/${code}/${uid}`), writeOptions());
 
     if (notificationUnsubs[code]) {
         notificationUnsubs[code]();
@@ -1602,7 +1643,7 @@ async function loadAllMembers(code) {
 
     allMembersListEl.innerHTML = "<li>Loading members...</li>";
 
-    const membersSnap = await get(ref(db, `serverMembers/${code}`));
+    const membersSnap = await get(ref(db, `servers/${code}/members`));
     allMembersListEl.innerHTML = "";
 
     if (!membersSnap.exists()) {
@@ -1616,7 +1657,7 @@ async function loadAllMembers(code) {
         const userSnap = await get(ref(db, `users/${memberUid}/username`));
 
         if (!userSnap.exists()) {
-            await remove(ref(db, `serverMembers/${code}/${memberUid}`));
+            await remove(ref(db, `servers/${code}/members/${memberUid}`), writeOptions());
             continue;
         }
 
@@ -1779,7 +1820,7 @@ async function handleInvite() {
         const serverName = serverData.name || `Server ${joinCode}`;
 
         if (uid) {
-            await set(ref(db, `serverMembers/${joinCode}/${uid}`), true, writeOptions());
+            await set(ref(db, `servers/${joinCode}/members/${uid}`), true, writeOptions());
         }
 
         addServerToSidebar(joinCode, serverName);

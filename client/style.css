@@ -25,6 +25,15 @@ body {
     border-bottom: #29292d 1px solid;
 }
 
+#header h2 {
+    color: #96979e;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.8rem;
+    font-weight: 400;
+    margin-left: auto;
+    margin-right: 20px;
+}
+
 #header h1 {
     font-family: "Cal Sans", sans-serif;
     margin-top: 10px;
