@@ -24,6 +24,7 @@ let activeUsersUnsub = null;
 let unreadCounts = {};
 let lastRead = JSON.parse(localStorage.getItem("lastRead") || "{}");
 let contextMenuTargetServer = null;
+let targetContextMenuMsg
 
 // UI ELEMENTS
 let messagesListEl;
@@ -67,6 +68,10 @@ let allMembersHeaderEl;
 let contextInviteBtnEl;
 let contextKickBtnEl;
 let newMessage;
+let messageContextMenu;
+let msgContextGetUid;
+let msgContextBan;
+let msgContextDelete;
 
 function writeOptions() { return { auth: { uid } }; }
 
@@ -115,6 +120,10 @@ window.onload = async () => {
     contextKickBtnEl = document.getElementById("contextKick");
     newMessage = new Audio('/client/Assets/newMessage.mp3')
     await initAuthMode();
+    messageContextMenu = document.getElementById("messageContextMenu");
+    msgContextGetUid = document.getElementById("msgContextGetUid");
+    msgContextBan = document.getElementById("msgContextBan");
+    msgContextDelete = document.getElementById("msgContextDelete");
 
     if (noAuthMode) {
         uid = localStorage.getItem("fakeUid");
@@ -575,6 +584,84 @@ function attachUIListeners() {
             hideContextMenu();
         });
     }
+
+    msgContextGetUid.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        if (!targetContextMenuMsg) {
+            hideContextMenu();
+            return;
+        }
+
+        const targetUid = targetContextMenuMsg.uid;
+        hideContextMenu();
+
+        await navigator.clipboard.writeText(targetUid);
+    });
+
+    msgContextBan.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        if (!targetContextMenuMsg) {
+            hideContextMenu();
+            return;
+        }
+
+        const { uid: targetUid, username: targetUsername } = targetContextMenuMsg;
+
+        if (targetUid === uid) {
+            alert("You cannot ban yourself.");
+            hideContextMenu();
+            return;
+        }
+
+        const durationHours = prompt(`Ban duration (hours):`);
+        if (!durationHours) {
+            hideContextMenu();
+            return;
+        }
+
+        const reason = prompt(`Reason for ban:`);
+        if (!reason) {
+            hideContextMenu();
+            return;
+        }
+
+        const adminSnap = await get(ref(db, `admins/${targetUid}`));
+        if (adminSnap.exists()) {
+            alert("You cannot ban another admin.");
+            hideContextMenu();
+            return;
+        }
+
+        await set(ref(db, `bans/${targetUid}`), {
+            username: targetUsername,
+            reason,
+            duration: Number(durationHours) * 3600,
+            timestamp: Date.now(),
+            bannedBy: uid
+        });
+
+        alert(`User ${targetUsername} has been banned.`);
+        hideContextMenu();
+    });
+
+    msgContextDelete.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        if (!targetContextMenuMsg || !targetContextMenuMsg.id) {
+            hideContextMenu();
+            return;
+        }
+
+        const targetMsg = targetContextMenuMsg;
+        hideContextMenu();
+
+        if (targetMsg.fileUrl) {
+            const filename = targetMsg.fileUrl.split("/").pop();
+            const deleteUrl = `${UPLOAD_URL.replace("/upload", "")}/delete-file?name=${filename}`;
+            fetch(deleteUrl, { method: "DELETE" }).catch(err => console.error("File removal failed:", err));
+        }
+
+        await remove(ref(db, `servers/${currentServer}/messages/${targetMsg.id}`), writeOptions());
+    });
 }
 
 
@@ -760,7 +847,7 @@ async function switchServer(serverId) {
     lastMessage = null;
 
     unsubscribe = onChildAdded(messagesQuery, (snap) => {
-        const msg = snap.val();
+        const msg = { id: snap.key, ...snap.val() };
 
         if (msg.isDM) {
             const isSender = msg.uid === uid;
@@ -779,6 +866,14 @@ async function switchServer(serverId) {
         displayMessage(msg, isGrouped);
         lastMessage = msg;
         maybeNotify(msg, serverId);
+    });
+
+    onChildRemoved(messagesQuery, (snap) => {
+        const deletedId = snap.key;
+        const msgEl = messagesListEl.querySelector(`[data-id="${deletedId}"]`);
+        if (msgEl) {
+            msgEl.remove();
+        }
     });
 
     showChat();
@@ -1365,8 +1460,15 @@ async function enforceMessageLimit() {
 function displayMessage(msg, isGrouped) {
     const wrapper = document.createElement("div");
     wrapper.classList.add("message");
+    if (msg.id) wrapper.dataset.id = msg.id;
     if (isGrouped) wrapper.classList.add("grouped");
     if (msg.isDM) wrapper.classList.add("dm-message");
+
+    wrapper.addEventListener("contextmenu", (e) => {
+        if (isAdmin) {
+            showMessageContextMenu(e, msg);
+        }
+    });
 
     if (!isGrouped) {
         const header = document.createElement("div");
@@ -1789,9 +1891,40 @@ function showServerContextMenu(e, serverCode) {
 }
 
 function hideContextMenu() {
-    if (contextMenuEl) contextMenuEl.classList.add("hidden");
+    if (contextMenuEl) {
+        contextMenuEl.classList.add("hidden");
+    }
     contextMenuTargetServer = null;
+
+    if (messageContextMenu) {
+        messageContextMenu.classList.add("hidden");
+    }
+    targetContextMenuMsg = null;
 }
+
+function showMessageContextMenu(e, msg) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!isAdmin) return;
+
+    targetContextMenuMsg = msg;
+    
+    serverContextMenu.classList.add("hidden");
+
+    messageContextMenu.classList.remove("hidden");
+
+    const menuHeight = messageContextMenu.offsetHeight;
+    const menuWidth = messageContextMenu.offsetWidth;
+    let top = e.clientY;
+    let left = e.clientX;
+
+    if (e.clientY + menuHeight > window.innerHeight) top = e.clientY - menuHeight;
+    if (e.clientX + menuWidth > window.innerWidth) left = e.clientX - menuWidth;
+
+    messageContextMenu.style.top = `${top}px`;
+    messageContextMenu.style.left = `${left}px`;
+} 
 
 async function handleInvite() {
     const rawHash = window.location.hash;
