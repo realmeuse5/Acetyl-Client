@@ -25,6 +25,7 @@ let unreadCounts = {};
 let lastRead = JSON.parse(localStorage.getItem("lastRead") || "{}");
 let contextMenuTargetServer = null;
 let targetContextMenuMsg
+let currentKickUnsub = null;
 
 // UI ELEMENTS
 let messagesListEl;
@@ -72,6 +73,7 @@ let messageContextMenu;
 let msgContextGetUid;
 let msgContextBan;
 let msgContextDelete;
+let msgContextKick;
 
 function writeOptions() { return { auth: { uid } }; }
 
@@ -124,6 +126,7 @@ window.onload = async () => {
     msgContextGetUid = document.getElementById("msgContextGetUid");
     msgContextBan = document.getElementById("msgContextBan");
     msgContextDelete = document.getElementById("msgContextDelete");
+    msgContextKick = document.getElementById("msgContextKick");
 
     if (noAuthMode) {
         uid = localStorage.getItem("fakeUid");
@@ -536,21 +539,14 @@ function attachUIListeners() {
                 return;
             }
 
-            const targetUser = prompt("Enter user to kick:");
+            const targetUser = prompt("Enter username to kick:");
             if (!targetUser) {
                 hideContextMenu();
                 return;
             }
 
             const targetName = targetUser.trim();
-            if (targetName === username) {
-                alert("You cannot kick yourself. Use 'Leave Server' instead.");
-                hideContextMenu();
-                return;
-            }
-
-            const server = myServers.find(s => s.code === contextMenuTargetServer);
-            const serverName = server ? server.name : contextMenuTargetServer;
+            hideContextMenu();
 
             try {
                 const usersSnap = await get(ref(db, "users"));
@@ -568,20 +564,13 @@ function attachUIListeners() {
 
                 if (!targetUid) {
                     alert(`User @${targetName} was not found.`);
-                    hideContextMenu();
                     return;
                 }
 
-                await remove(ref(db, `servers/${contextMenuTargetServer}/members/${targetUid}`), writeOptions());
-                await remove(ref(db, `servers/${contextMenuTargetServer}/activeUsers/${targetUid}`), writeOptions());
-
-                alert(`${targetName} was kicked from #${serverName}`);
+                await toggleKickUser(contextMenuTargetServer, targetUid, targetName);
             } catch (err) {
-                console.error("Kick failed:", err);
                 alert("Failed to kick user.");
             }
-
-            hideContextMenu();
         });
     }
 
@@ -661,6 +650,20 @@ function attachUIListeners() {
         }
 
         await remove(ref(db, `servers/${currentServer}/messages/${targetMsg.id}`), writeOptions());
+    });
+
+    msgContextKick.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        if (!targetContextMenuMsg) {
+            hideContextMenu();
+            return;
+        }
+
+        const targetUid = targetContextMenuMsg.uid;
+        const targetUsername = targetContextMenuMsg.username;
+
+        hideContextMenu();
+        await toggleKickUser(currentServer, targetUid, targetUsername);
     });
 }
 
@@ -773,6 +776,64 @@ async function checkBanStatus(userUid) {
     });
 }
 
+// KICKING USERS
+async function toggleKickUser(serverId, targetUid, targetUsername) {
+    if (serverId === "public" || serverId === "announcements") {
+        alert("You cannot kick users from public or announcements servers.");
+        return;
+    }
+
+    const serverSnap = await get(ref(db, `servers/${serverId}`));
+    if (!serverSnap.exists()) {
+        alert("Server not found.");
+        return;
+    }
+    const serverData = serverSnap.val();
+
+    const isOwner = serverData.createdBy === uid;
+    if (!isOwner && !isAdmin) {
+        alert("Only the server owner or an admin can kick users.");
+        return;
+    }
+
+    if (targetUid === uid) {
+        alert("You cannot kick yourself. Use 'Leave Server' instead.");
+        return;
+    }
+
+    const targetAdminSnap = await get(ref(db, `admins/${targetUid}`));
+    if (targetAdminSnap.exists()) {
+        alert("You cannot kick an admin.");
+        return;
+    }
+
+    const kickedRef = ref(db, `servers/${serverId}/kicked/${targetUid}`);
+    const kickedSnap = await get(kickedRef);
+
+    if (kickedSnap.exists()) {
+        const confirmUnkick = confirm(`User @${targetUsername} is currently kicked. Do you want to unkick them?`);
+        if (!confirmUnkick) return;
+
+        await remove(kickedRef, writeOptions());
+        alert(`User @${targetUsername} has been unkicked from the server.`);
+    } else {
+        await set(kickedRef, {
+            username: targetUsername,
+            kickedBy: uid,
+            timestamp: Date.now()
+        }, writeOptions());
+
+        await remove(ref(db, `servers/${serverId}/members/${targetUid}`), writeOptions());
+        await remove(ref(db, `servers/${serverId}/activeUsers/${targetUid}`), writeOptions());
+
+        alert(`User @${targetUsername} has been kicked from the server.`);
+    }
+
+    if (rightSidebarEl && getComputedStyle(rightSidebarEl).display !== "none") {
+        loadAllMembers(serverId);
+    }
+}
+
 
 // SERVER SWITCHING
 async function switchServer(serverId) {
@@ -810,6 +871,11 @@ async function switchServer(serverId) {
 
     if (activeUsersUnsub) activeUsersUnsub();
 
+    if (currentKickUnsub) {
+        currentKickUnsub();
+        currentKickUnsub = null;
+    }
+
     const serverRef = ref(db, `servers/${serverId}`);
     const serverSnap = await get(serverRef);
 
@@ -825,6 +891,29 @@ async function switchServer(serverId) {
 
     updatePlaceholder(serverName);
     currentServer = serverId;
+
+    if (serverId !== "public" && serverId !== "announcements") {
+        const myKickRef = ref(db, `servers/${serverId}/kicked/${uid}`);
+        currentKickUnsub = onValue(myKickRef, (snap) => {
+            if (snap.exists()) {
+                alert("You have been kicked from this server.");
+
+                if (currentKickUnsub) {
+                    currentKickUnsub();
+                    currentKickUnsub = null;
+                }
+
+                myServers = myServers.filter(s => s.code !== serverId);
+                localStorage.setItem("myServers", JSON.stringify(myServers));
+
+                const row = [...serverListEl.children].find(r => r.dataset.server === serverId);
+                if (row) row.remove();
+
+                switchServer("public");
+            }
+        });
+    }
+
     setupPresence(serverId);
     highlightActiveServer(serverId);
     if (unsubscribe) unsubscribe();
@@ -1094,8 +1183,9 @@ async function joinServer() {
         return;
     }
 
-    if (code === "public") {
-        switchServer("public");
+    const kickSnap = await get(ref(db, `servers/${code}/kicked/${uid}`));
+    if (kickSnap.exists()) {
+        alert("You have been kicked from this server.");
         return;
     }
 
@@ -1107,15 +1197,8 @@ async function joinServer() {
         return;
     }
 
-    let name = snapshot.val().name;
-    if (!name) {
-        name = `Server ${code}`;
-        await set(ref(db, `servers/${code}/name`), name, writeOptions());
-    }
-
-    if (uid) {
-        await set(ref(db, `servers/${code}/members/${uid}`), true, writeOptions());
-    }
+    let name = snapshot.val().name || `Server ${code}`;
+    await set(ref(db, `servers/${code}/members/${uid}`), true, writeOptions());
 
     addServerToSidebar(code, name);
     switchServer(code);
@@ -1225,23 +1308,15 @@ async function updateKickButton(serverCode) {
 
     try {
         const serverSnap = await get(ref(db, `servers/${serverCode}`));
+        const serverData = serverSnap.exists() ? serverSnap.val() : null;
+        const isOwner = serverData && serverData.createdBy === uid;
+        const canKick = isOwner || isAdmin;
 
-        if (!serverSnap.exists()) {
-            contextKickBtnEl.classList.add("disabled");
-            return;
-        }
-
-        const serverData = serverSnap.val();
-
-        if (!serverData.createdBy) {
-            contextKickBtnEl.classList.add("disabled");
-            contextKickBtnEl.title = "This server is ownerless so kicking is disabled. Contact @𝙍乇𝘼𝙇𝙈𝙀𝙐𝙎𝙀 to claim ownership.";
-        } else if (serverData.createdBy !== uid) {
-            contextKickBtnEl.classList.add("disabled");
-            contextKickBtnEl.title = "You are not the owner of this server.";
-        } else {
+        if (canKick) {
             contextKickBtnEl.classList.remove("disabled");
-            contextKickBtnEl.title = "";
+        } else {
+            contextKickBtnEl.classList.add("disabled");
+            contextKickBtnEl.title = "Only the server owner or an admin can kick users";
         }
     } catch (err) {
         contextKickBtnEl.classList.add("disabled");
@@ -1890,7 +1965,14 @@ function showServerContextMenu(e, serverCode) {
     contextMenuEl.style.left = `${left}px`;
 }
 
-function hideContextMenu() {
+function hideContextMenu(e) {
+    if (e && (
+        (contextMenuEl && contextMenuEl.contains(e.target)) ||
+        (messageContextMenu && messageContextMenu.contains(e.target))
+    )) {
+        return;
+    }
+
     if (contextMenuEl) {
         contextMenuEl.classList.add("hidden");
     }
@@ -1902,15 +1984,28 @@ function hideContextMenu() {
     targetContextMenuMsg = null;
 }
 
-function showMessageContextMenu(e, msg) {
+async function showMessageContextMenu(e, msg) {
     e.preventDefault();
     e.stopPropagation();
 
-    if (!isAdmin) return;
-
     targetContextMenuMsg = msg;
-    
-    serverContextMenu.classList.add("hidden");
+
+    const serverSnap = await get(ref(db, `servers/${currentServer}`));
+    const serverData = serverSnap.exists() ? serverSnap.val() : null;
+    const isOwner = serverData && serverData.createdBy === uid;
+    const canKick = (isOwner || isAdmin) && currentServer !== "public" && currentServer !== "announcements";
+
+    if (msgContextKick) {
+        if (canKick) {
+            msgContextKick.classList.remove("disabled");
+            msgContextKick.style.display = "block";
+        } else {
+            msgContextKick.classList.add("disabled");
+            msgContextKick.style.display = "none";
+        }
+    }
+
+    if (contextMenuEl) contextMenuEl.classList.add("hidden");
 
     messageContextMenu.classList.remove("hidden");
 
@@ -1924,7 +2019,7 @@ function showMessageContextMenu(e, msg) {
 
     messageContextMenu.style.top = `${top}px`;
     messageContextMenu.style.left = `${left}px`;
-} 
+}
 
 async function handleInvite() {
     const rawHash = window.location.hash;
@@ -1938,6 +2033,12 @@ async function handleInvite() {
     if (joinCode === "public" || joinCode === "announcements" || myServers.some(s => s.code === joinCode)) {
         switchServer(joinCode);
         return true;
+    }
+
+    const kickSnap = await get(ref(db, `servers/${joinCode}/kicked/${uid}`));
+    if (kickSnap.exists()) {
+        alert("You have been kicked from this server.");
+        return false;
     }
 
     try {

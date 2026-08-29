@@ -30,16 +30,8 @@ body {
 #header img {
     height: 40px;
     margin-left: 15px;
-    cursor: pointer
-}
-
-#header h1 {
-    font-family: "Cal Sans", sans-serif;
-    margin-left: 10px;
-    font-size: 1.8rem;
-    color: white;
-    margin-right: 40px;
-    cursor: pointer
+    cursor: pointer;
+    margin-right: 40px
 }
 
 #header a {
@@ -78,6 +70,8 @@ body {
     display: flex;
     flex-direction: row;
     align-items: center;
+    margin-top: 20px;
+    margin-bottom: 10px;
 }
 
 #footer .left img {
