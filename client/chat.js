@@ -316,7 +316,7 @@ function attachUIListeners() {
             return;
         }
 
-        const command = prompt("Enter admin command:");
+        const command = prompt("Enter admin command:\nUse /cmds for all admin commands");
         if (!command) return;
 
         switch (command.toLowerCase()) {
@@ -369,6 +369,28 @@ function attachUIListeners() {
                 loadFeedback();
                 break;
 
+            case "/admins": {
+                const adminsSnap = await get(ref(db, "admins"));
+                if (!adminsSnap.exists()) {
+                    alert("No admins found.");
+                    break;
+                }
+
+                const adminUids = Object.keys(adminsSnap.val());
+                const usersSnap = await get(ref(db, "users"));
+                const users = usersSnap.exists() ? usersSnap.val() : {};
+
+                const adminUsernames = adminUids.map(adminUid => {
+                    return users[adminUid]?.username || adminUid;
+                });
+
+                alert(`Admins:\n${adminUsernames.join("\n")}`);
+                break;
+            }
+
+            case "/cmds":
+                alert("Admin commands:\n/ban 🡒 ban a user\n/feedback 🡒 view feedback submitted by users\n/admins 🡒 view all admins\nMore coming soon, contact @𝙍乇𝘼𝙇𝙈𝙀𝙐𝙎𝙀 with ideas")
+                break;
             default:
                 alert("Invalid command.");
         }
@@ -1621,7 +1643,7 @@ function displayMessage(msg, isGrouped) {
     if (msg.text) {
         const textEl = document.createElement("span");
         textEl.classList.add("text");
-        textEl.textContent = msg.text;
+        textEl.innerHTML = formatMessage(msg.text);
         wrapper.appendChild(textEl);
     }
 
@@ -1701,7 +1723,7 @@ function displayAnnouncement(msg) {
     if (msg.body) {
         const bodyEl = document.createElement("span");
         bodyEl.classList.add("announcement-body");
-        bodyEl.textContent = msg.body;
+        bodyEl.innerHTML = formatMessage(msg.body);
         wrapper.appendChild(bodyEl);
     }
 
@@ -1753,6 +1775,17 @@ function displayAnnouncement(msg) {
     if (isNearBottom()) {
         messagesListEl.scrollTop = messagesListEl.scrollHeight;
     }
+}
+
+function formatMessage(text) {
+    if (!text) return;
+
+    const urlRegex = /(https?:\/\/[^\s<]+)/g;
+
+    return text.replace(urlRegex, (url) => {
+        const cleanUrl = url.replace(/[.,;!?]+$/, "");
+        return `<a href="${cleanUrl}" target="_blank" rel="noopener noreferrer" class="chat-link">${cleanUrl}</a>`;
+    });
 }
 
 

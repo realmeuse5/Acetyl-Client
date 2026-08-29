@@ -80,6 +80,7 @@
     max-width: 100%;
     max-height: 450px;
     object-fit: contain;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
 }
 
 #section-3 {
@@ -113,10 +114,10 @@
 }
 
 #section-3 video {
-    width: 100%;
-    max-width: 300px; /* Constrains mobile preview width */
     max-height: 500px;
-    object-fit: contain;
+    object-fit: cover;
+    border-radius: 35px;
+    clip-path: inset(0 2px 2px 0); 
 }
 
 #section-3 a {
