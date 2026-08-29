@@ -74,6 +74,8 @@ let msgContextGetUid;
 let msgContextBan;
 let msgContextDelete;
 let msgContextKick;
+let kickedMembersHeaderEl
+let kickedMembersListEl
 
 function writeOptions() { return { auth: { uid } }; }
 
@@ -127,6 +129,8 @@ window.onload = async () => {
     msgContextBan = document.getElementById("msgContextBan");
     msgContextDelete = document.getElementById("msgContextDelete");
     msgContextKick = document.getElementById("msgContextKick");
+    kickedMembersHeaderEl = document.getElementById("kickedMembersHeader");
+    kickedMembersListEl = document.getElementById("kickedMembersList");
 
     if (noAuthMode) {
         uid = localStorage.getItem("fakeUid");
@@ -539,14 +543,17 @@ function attachUIListeners() {
                 return;
             }
 
-            const targetUser = prompt("Enter username to kick:");
-            if (!targetUser) {
-                hideContextMenu();
+            const targetServerId = contextMenuTargetServer;
+            hideContextMenu();
+
+            if (!targetServerId) {
                 return;
             }
 
+            const targetUser = prompt("Enter username to kick:");
+            if (!targetUser) return;
+
             const targetName = targetUser.trim();
-            hideContextMenu();
 
             try {
                 const usersSnap = await get(ref(db, "users"));
@@ -567,9 +574,9 @@ function attachUIListeners() {
                     return;
                 }
 
-                await toggleKickUser(contextMenuTargetServer, targetUid, targetName);
+                await toggleKickUser(targetServerId, targetUid, targetName);
             } catch (err) {
-                alert("Failed to kick user.");
+                console.error("Kick/unkick toggle failed:", err);
             }
         });
     }
@@ -1804,47 +1811,94 @@ function setupActiveUserListener(code) {
 }
 
 async function loadAllMembers(code) {
-    if (!allMembersListEl) return;
+    if (!allMembersListEl || !kickedMembersListEl) return;
 
     const isPublic = (code === "public" || code === "announcements");
 
     if (allMembersHeaderEl) {
         allMembersHeaderEl.style.display = isPublic ? "none" : "block";
     }
+    if (kickedMembersHeaderEl) {
+        kickedMembersHeaderEl.style.display = isPublic ? "none" : "block";
+    }
+
     allMembersListEl.style.display = isPublic ? "none" : "block";
+    kickedMembersListEl.style.display = isPublic ? "none" : "block";
 
     if (isPublic) {
         allMembersListEl.innerHTML = "";
+        kickedMembersListEl.innerHTML = "";
         return;
     }
 
     allMembersListEl.innerHTML = "<li>Loading members...</li>";
+    kickedMembersListEl.innerHTML = "";
 
-    const membersSnap = await get(ref(db, `servers/${code}/members`));
-    allMembersListEl.innerHTML = "";
+    try {
+        const [membersSnap, kickedSnap, serverSnap] = await Promise.all([
+            get(ref(db, `servers/${code}/members`)),
+            get(ref(db, `servers/${code}/kicked`)),
+            get(ref(db, `servers/${code}`))
+        ]);
 
-    if (!membersSnap.exists()) {
-        allMembersListEl.innerHTML = "<li>No members found</li>";
-        return;
-    }
+        allMembersListEl.innerHTML = "";
 
-    const memberUids = Object.keys(membersSnap.val());
+        const serverData = serverSnap.exists() ? serverSnap.val() : null;
+        const isOwner = serverData && serverData.createdBy === uid;
+        const canManageKicks = isOwner || isAdmin;
 
-    for (const memberUid of memberUids) {
-        const userSnap = await get(ref(db, `users/${memberUid}/username`));
+        if (membersSnap.exists()) {
+            const memberUids = Object.keys(membersSnap.val());
 
-        if (!userSnap.exists()) {
-            await remove(ref(db, `servers/${code}/members/${memberUid}`), writeOptions());
-            continue;
+            for (const memberUid of memberUids) {
+                const userSnap = await get(ref(db, `users/${memberUid}/username`));
+
+                if (!userSnap.exists()) {
+                    await remove(ref(db, `servers/${code}/members/${memberUid}`), writeOptions());
+                    continue;
+                }
+
+                const li = document.createElement("li");
+                li.textContent = userSnap.val();
+                allMembersListEl.appendChild(li);
+            }
         }
 
-        const li = document.createElement("li");
-        li.textContent = userSnap.val();
-        allMembersListEl.appendChild(li);
-    }
+        if (allMembersListEl.children.length === 0) {
+            allMembersListEl.innerHTML = "<li>No members found</li>";
+        }
 
-    if (allMembersListEl.children.length === 0) {
-        allMembersListEl.innerHTML = "<li>No members found</li>";
+        if (kickedSnap.exists()) {
+            if (kickedMembersHeaderEl) kickedMembersHeaderEl.style.display = "block";
+            kickedMembersListEl.style.display = "block";
+
+            kickedSnap.forEach((childSnap) => {
+                const kickedData = childSnap.val();
+                const targetUid = childSnap.key;
+                const targetUsername = kickedData.username || targetUid;
+
+                const li = document.createElement("li");
+                li.textContent = targetUsername;
+                li.style.color = "#e57573";
+
+                if (canManageKicks) {
+                    li.style.cursor = "pointer";
+                    li.title = "Click to unkick user";
+                    li.addEventListener("click", async () => {
+                        await toggleKickUser(code, targetUid, targetUsername);
+                    });
+                }
+
+                kickedMembersListEl.appendChild(li);
+            });
+        } else {
+            if (kickedMembersHeaderEl) kickedMembersHeaderEl.style.display = "none";
+            kickedMembersListEl.style.display = "none";
+        }
+
+    } catch (err) {
+        console.error("Failed to load members:", err);
+        allMembersListEl.innerHTML = "<li>Error loading members</li>";
     }
 }
 
