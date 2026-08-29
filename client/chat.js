@@ -10,6 +10,7 @@ import {
 // CONSTANTS
 const UPLOAD_URL = "https://acetyl-file-server.onrender.com/upload";
 
+
 // GLOBALS
 let uid = null;
 let username = "";
@@ -26,6 +27,11 @@ let lastRead = JSON.parse(localStorage.getItem("lastRead") || "{}");
 let contextMenuTargetServer = null;
 let targetContextMenuMsg
 let currentKickUnsub = null;
+let currentVoiceServer = null;
+let voiceUsersUnsub = null;
+let localAudioStream = null;
+let signalUnsub = null;
+
 
 // UI ELEMENTS
 let messagesListEl;
@@ -76,6 +82,9 @@ let msgContextDelete;
 let msgContextKick;
 let kickedMembersHeaderEl
 let kickedMembersListEl
+let contextJoinVoiceBtnEl
+let voiceContainerEl
+let voiceBackBtnEl
 
 function writeOptions() { return { auth: { uid } }; }
 
@@ -131,6 +140,9 @@ window.onload = async () => {
     msgContextKick = document.getElementById("msgContextKick");
     kickedMembersHeaderEl = document.getElementById("kickedMembersHeader");
     kickedMembersListEl = document.getElementById("kickedMembersList");
+    contextJoinVoiceBtnEl = document.getElementById("contextJoinVoice")
+    voiceContainerEl = document.getElementById("voice-container")
+    voiceBackBtnEl = document.getElementById("voiceBackBtn");
 
     if (noAuthMode) {
         uid = localStorage.getItem("fakeUid");
@@ -694,6 +706,20 @@ function attachUIListeners() {
         hideContextMenu();
         await toggleKickUser(currentServer, targetUid, targetUsername);
     });
+
+    if (contextJoinVoiceBtnEl) {
+        contextJoinVoiceBtnEl.addEventListener("click", (e) => {
+            e.stopPropagation();
+            if (contextMenuTargetServer) {
+                joinVoiceChat(contextMenuTargetServer);
+            }
+            hideContextMenu();
+        });
+    }
+
+    if (voiceBackBtnEl) {
+        voiceBackBtnEl.addEventListener("click", leaveVoiceChat);
+    }
 }
 
 
@@ -710,7 +736,6 @@ async function changeUsername() {
 
     if (cleaned === username) return;
 
-    // Check if username is already taken
     const usersSnap = await get(ref(db, "users"));
     if (usersSnap.exists()) {
         const users = usersSnap.val();
@@ -722,7 +747,6 @@ async function changeUsername() {
         }
     }
 
-    // Apply new username
     username = cleaned;
     usernameEl.textContent = username;
     localStorage.setItem("username", username);
@@ -731,7 +755,6 @@ async function changeUsername() {
 
     await set(ref(db, `users/${uid}/username`), username, writeOptions());
 
-    // Update presence username in all joined servers
     myServers.forEach(server => {
         const userRef = ref(db, `servers/${server.code}/activeUsers/${uid}`);
         set(userRef, {
@@ -994,7 +1017,12 @@ async function switchServer(serverId) {
         }
     });
 
-    showChat();
+    if (currentVoiceServer === serverId) {
+        joinVoiceChat(serverId);
+    } else {
+        showChat();
+    }
+
     setupActiveUserListener(serverId);
     if (rightSidebarEl && getComputedStyle(rightSidebarEl).display !== "none") {
         loadAllMembers(serverId);
@@ -1032,6 +1060,7 @@ function showChat() {
     chatContainerEl.style.display = "flex";
     messageBarEl.style.display = "flex";
     guidelinesContainerEl.style.display = "none";
+    voiceContainerEl.classList.add("hidden");
     guidelinesBtnEl.classList.remove("active");
 }
 
@@ -1045,6 +1074,7 @@ function showGuidelines() {
     document.querySelectorAll(".tabBtn").forEach(btn => btn.classList.remove("active"));
     document.querySelectorAll(".serverRow").forEach(btn => btn.classList.remove("active"));
     guidelinesBtnEl.classList.add("active");
+    voiceContainerEl.classList.add("hidden");
 }
 
 function showFeedbackForm() {
@@ -1059,6 +1089,7 @@ function showFeedbackForm() {
     guidelinesBtnEl.classList.add("active");
     feedbackMessageEl.value = "";
     feedbackCategoryEl.value = "general";
+    voiceContainerEl.classList.add("hidden");
 }
 
 function showFeedbackViewer() {
@@ -1071,6 +1102,7 @@ function showFeedbackViewer() {
     document.querySelectorAll(".tabBtn").forEach(btn => btn.classList.remove("active"));
     document.querySelectorAll(".serverRow").forEach(btn => btn.classList.remove("active"));
     guidelinesBtnEl.classList.add("active");
+    voiceContainerEl.classList.add("hidden");
 }
 
 async function submitFeedback() {
@@ -1933,6 +1965,220 @@ async function loadAllMembers(code) {
         console.error("Failed to load members:", err);
         allMembersListEl.innerHTML = "<li>Error loading members</li>";
     }
+}
+
+
+// VOICECHAT
+const peerConnections = {};
+const rtcConfig = {
+    iceServers: [
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun1.l.google.com:19302" }
+    ]
+};
+
+async function joinVoiceChat(serverCode) {
+    if (currentVoiceServer && currentVoiceServer !== serverCode) {
+        leaveVoiceChat();
+    }
+
+    await initLocalAudio();
+
+    currentVoiceServer = serverCode;
+
+    chatContainerEl.style.display = "none";
+    messageBarEl.style.display = "none";
+    guidelinesContainerEl.style.display = "none";
+    if (voiceContainerEl) voiceContainerEl.classList.remove("hidden");
+
+    const voiceUserRef = ref(db, `servers/${serverCode}/voice/${uid}`);
+
+    onDisconnect(voiceUserRef).remove(writeOptions());
+
+    await set(voiceUserRef, {
+        username,
+        joinedAt: serverTimestamp(),
+        isMuted: false
+    }, writeOptions());
+
+    listenToVoiceUsers(serverCode);
+    listenForSignals(serverCode);
+}
+
+async function leaveVoiceChat() {
+    const serverToClean = currentVoiceServer;
+
+    if (serverToClean && uid) {
+        const voiceUserRef = ref(db, `servers/${serverToClean}/voice/${uid}`);
+        await remove(voiceUserRef, writeOptions());
+
+        const mySignalRef = ref(db, `servers/${serverToClean}/signal/${uid}`);
+        await remove(mySignalRef, writeOptions());
+    }
+
+    if (voiceUsersUnsub) {
+        voiceUsersUnsub();
+        voiceUsersUnsub = null;
+    }
+
+    if (signalUnsub) {
+        signalUnsub();
+        signalUnsub = null;
+    }
+
+    currentVoiceServer = null;
+
+    const gridEl = document.querySelector(".voice-grid");
+    if (gridEl) gridEl.innerHTML = "";
+
+    if (localAudioStream) {
+        localAudioStream.getTracks().forEach((track) => track.stop());
+        localAudioStream = null;
+    }
+
+    Object.keys(peerConnections).forEach((targetUid) => {
+        peerConnections[targetUid].close();
+        delete peerConnections[targetUid];
+
+        const audioEl = document.getElementById(`audio-${targetUid}`);
+        if (audioEl) audioEl.remove();
+    });
+
+    showChat();
+}
+
+function listenToVoiceUsers(serverCode) {
+    if (voiceUsersUnsub) voiceUsersUnsub();
+
+    const voiceRef = ref(db, `servers/${serverCode}/voice`);
+
+    voiceUsersUnsub = onValue(voiceRef, (snapshot) => {
+        const gridEl = document.querySelector(".voice-grid");
+        if (!gridEl) return;
+
+        gridEl.innerHTML = "";
+
+        if (!snapshot.exists()) return;
+
+        const users = snapshot.val();
+
+        Object.keys(users).forEach((userUid) => {
+            const userData = users[userUid];
+            const isSelf = userUid === uid;
+
+            if (!isSelf && !peerConnections[userUid]) {
+                createPeerConnection(userUid, true);
+            }
+
+            const card = document.createElement("div");
+            card.className = "voice-card";
+            card.id = `voice-card-${userUid}`;
+
+            card.innerHTML = `
+                <div class="username">${userData.username}${isSelf ? " (You)" : ""}</div>
+            `;
+
+            gridEl.appendChild(card);
+        });
+    });
+}
+
+async function initLocalAudio() {
+    try {
+        localAudioStream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true
+            },
+            video: false
+        });
+    } catch (err) {
+        console.error("Microphone access denied or unavailable:", err);
+        alert("Could not access microphone.");
+    }
+}
+
+async function createPeerConnection(targetUid, isInitiator) {
+    if (peerConnections[targetUid]) return peerConnections[targetUid];
+
+    const pc = new RTCPeerConnection(rtcConfig);
+    peerConnections[targetUid] = pc;
+
+    if (localAudioStream) {
+        localAudioStream.getTracks().forEach((track) => {
+            pc.addTrack(track, localAudioStream);
+        });
+    }
+
+    pc.ontrack = (event) => {
+        let remoteAudioEl = document.getElementById(`audio-${targetUid}`);
+        if (!remoteAudioEl) {
+            remoteAudioEl = document.createElement("audio");
+            remoteAudioEl.id = `audio-${targetUid}`;
+            remoteAudioEl.autoplay = true;
+            document.body.appendChild(remoteAudioEl);
+        }
+        remoteAudioEl.srcObject = event.streams[0];
+    };
+
+    pc.onicecandidate = (event) => {
+        if (event.candidate) {
+            const candidateRef = push(ref(db, `servers/${currentVoiceServer}/signal/${targetUid}/${uid}/candidates`));
+            set(candidateRef, event.candidate.toJSON());
+        }
+    };
+
+    if (isInitiator) {
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+
+        const offerRef = ref(db, `servers/${currentVoiceServer}/signal/${targetUid}/${uid}/offer`);
+        await set(offerRef, { type: offer.type, sdp: offer.sdp });
+    }
+
+    return pc;
+}
+
+function listenForSignals(serverCode) {
+    if (signalUnsub) signalUnsub();
+
+    const mySignalRef = ref(db, `servers/${serverCode}/signal/${uid}`);
+
+    signalUnsub = onValue(mySignalRef, async (snapshot) => {
+        if (!snapshot.exists()) return;
+
+        const incomingSignals = snapshot.val();
+
+        for (const senderUid of Object.keys(incomingSignals)) {
+            const signalData = incomingSignals[senderUid];
+
+            if (signalData.offer && !peerConnections[senderUid]) {
+                const pc = await createPeerConnection(senderUid, false);
+                await pc.setRemoteDescription(new RTCSessionDescription(signalData.offer));
+
+                const answer = await pc.createAnswer();
+                await pc.setLocalDescription(answer);
+
+                const answerRef = ref(db, `servers/${serverCode}/signal/${senderUid}/${uid}/answer`);
+                await set(answerRef, { type: answer.type, sdp: answer.sdp });
+            }
+
+            if (signalData.answer && peerConnections[senderUid]) {
+                const pc = peerConnections[senderUid];
+                if (!pc.currentRemoteDescription) {
+                    await pc.setRemoteDescription(new RTCSessionDescription(signalData.answer));
+                }
+            }
+
+            if (signalData.candidates && peerConnections[senderUid]) {
+                const pc = peerConnections[senderUid];
+                Object.values(signalData.candidates).forEach((cand) => {
+                    pc.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {});
+                });
+            }
+        }
+    });
 }
 
 

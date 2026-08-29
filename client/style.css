@@ -813,7 +813,7 @@ a {
 }
 
 .hidden {
-    display: none;
+    display: none !important;
 }
 
 .announcement-title {
@@ -1073,4 +1073,71 @@ a {
     background-color: #222327;
 }
 
+/* VOICECHAT */
 
+#voice-container {
+    display: flex;
+    flex-direction: column;
+    height: 95vh;
+}
+
+#voiceHeader {
+    display: flex;
+    align-items: center;
+    border-bottom: #29292d 1px solid;
+    padding: 7px;
+    padding-top: 0;
+}
+
+#voiceBackBtn {
+    font-size: 1rem;
+    border: none;
+    background: none;
+    color: #96979e;
+    cursor: pointer;
+    font-family: "DM Sans", sans-serif;
+    margin: 0;
+}
+
+#voiceBackBtn:hover {
+    color: white;
+}
+
+#voiceMuteBtn {
+    margin-left: 20px;
+}
+
+.voice-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    grid-auto-rows: 1fr; 
+    flex: 1;
+    gap: 12px;
+    padding: 16px;
+    box-sizing: border-box;
+}
+
+.voice-card {
+    background: #222327;
+    border: 1px solid #29292d;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    box-sizing: border-box;
+    width: 100%;
+    height: 100%;
+}
+
+.voice-card.speaking {
+    border-color: #fff;
+}
+
+.voice-card .username {
+    color: #fff;
+    font-size: 1.5rem;
+    font-family: "DM Sans", sans-serif;
+    text-align: center;
+    word-break: break-word;
+}
