@@ -417,6 +417,11 @@ a {
     color: #96979e;
 }
 
+.serverHash:has(i) {
+    transform: scale(0.8,1);
+    margin: 0;
+}
+
 .serverName {
     color: #96979e;
     margin-left: 15px;
@@ -1104,7 +1109,20 @@ a {
 }
 
 #voiceMuteBtn {
+    margin: 0;
     margin-left: 20px;
+    font-size: 1rem;
+    border: none;
+    background: none;
+    color: #96979e;
+    cursor: pointer;
+    padding: 5px 10px;
+    border-radius: 5px;
+}
+
+#voiceMuteBtn:hover {
+    background-color: #222327;
+    color: #fff;
 }
 
 .voice-grid {
@@ -1131,7 +1149,7 @@ a {
 }
 
 .voice-card.speaking {
-    border-color: #fff;
+    border: 2px solid #29292d;
 }
 
 .voice-card .username {

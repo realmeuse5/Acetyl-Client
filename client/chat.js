@@ -31,6 +31,7 @@ let currentVoiceServer = null;
 let voiceUsersUnsub = null;
 let localAudioStream = null;
 let signalUnsub = null;
+let isMuted = false;
 
 
 // UI ELEMENTS
@@ -85,6 +86,7 @@ let kickedMembersListEl
 let contextJoinVoiceBtnEl
 let voiceContainerEl
 let voiceBackBtnEl
+let voiceMuteBtnEl
 
 function writeOptions() { return { auth: { uid } }; }
 
@@ -143,6 +145,7 @@ window.onload = async () => {
     contextJoinVoiceBtnEl = document.getElementById("contextJoinVoice")
     voiceContainerEl = document.getElementById("voice-container")
     voiceBackBtnEl = document.getElementById("voiceBackBtn");
+    voiceMuteBtnEl = document.getElementById("voiceMuteBtn");
 
     if (noAuthMode) {
         uid = localStorage.getItem("fakeUid");
@@ -721,6 +724,38 @@ function attachUIListeners() {
     if (voiceBackBtnEl) {
         voiceBackBtnEl.addEventListener("click", () => leaveVoiceChat());
     }
+
+    if (voiceMuteBtnEl) {
+        voiceMuteBtnEl.addEventListener("click", async () => {
+            if (!localAudioStream) return;
+
+            isMuted = !isMuted;
+
+            localAudioStream.getAudioTracks().forEach(track => {
+                track.enabled = !isMuted;
+            });
+
+            const iconEl = voiceMuteBtnEl.querySelector("i");
+            if (isMuted) {
+                iconEl.className = "fa-solid fa-microphone-slash";
+                voiceMuteBtnEl.classList.add("muted");
+                voiceMuteBtnEl.title = 'Unmute'
+            } else {
+                iconEl.className = "fa-solid fa-microphone";
+                voiceMuteBtnEl.classList.remove("muted");
+                voiceMuteBtnEl.title = 'Mute'
+            }
+
+            if (currentVoiceServer && uid) {
+                const voiceUserRef = ref(db, `servers/${currentVoiceServer}/voice/${uid}`);
+                await set(voiceUserRef, {
+                    username: username || "Anonymous",
+                    joinedAt: serverTimestamp(),
+                    isMuted: isMuted
+                });
+            }
+        });
+    }
 }
 
 
@@ -1060,12 +1095,14 @@ function updatePlaceholder(serverName) {
 function showChat() {
     chatContainerEl.style.display = "flex";
     messageBarEl.style.display = "flex";
+    guidelinesContainerEl.classList.add("hidden");
     guidelinesContainerEl.style.display = "none";
     voiceContainerEl.classList.add("hidden");
     guidelinesBtnEl.classList.remove("active");
 }
 
 function showGuidelines() {
+    guidelinesContainerEl.classList.remove("hidden");
     guidelinesContainerEl.style.display = "block";
     chatContainerEl.style.display = "none";
     messageBarEl.style.display = "none";
@@ -1294,7 +1331,11 @@ function addServerToSidebar(code, name) {
 
     const hashEl = document.createElement("span");
     hashEl.classList.add("serverHash");
-    hashEl.textContent = "#";
+    if (code === currentVoiceServer) {
+        hashEl.innerHTML = `<i class="fa-solid fa-volume"></i>`;
+    } else {
+        hashEl.textContent = "#";
+    }
 
     const nameEl = document.createElement("span");
     nameEl.classList.add("serverName");
@@ -2015,6 +2056,7 @@ async function joinVoiceChat(serverCode) {
     if (!audioSuccess) return;
 
     currentVoiceServer = serverCode;
+    updateServerVoiceIcons();
 
     try {
         await remove(ref(db, `servers/${serverCode}/signal/${uid}`));
@@ -2076,6 +2118,7 @@ async function leaveVoiceChat(serverCode, myUid) {
     }
 
     currentVoiceServer = null;
+    updateServerVoiceIcons();
 
     if (voiceContainerEl) voiceContainerEl.classList.add("hidden");
     if (currentServer) {
@@ -2303,6 +2346,21 @@ function cleanupPeerConnection(targetUid) {
 
     const audioEl = document.getElementById(`audio-${targetUid}`);
     if (audioEl) audioEl.remove();
+}
+
+function updateServerVoiceIcons() {
+    const serverRows = serverListEl.querySelectorAll(".serverRow");
+    serverRows.forEach(row => {
+        const code = row.dataset.server;
+        const hashEl = row.querySelector(".serverButton .serverHash") || row.querySelector(".serverButton span:first-child");
+        if (!hashEl) return;
+
+        if (code === currentVoiceServer) {
+            hashEl.innerHTML = `<i class="fa-solid fa-volume-high"></i>`;
+        } else {
+            hashEl.textContent = "#";
+        }
+    });
 }
 
 
