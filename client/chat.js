@@ -160,6 +160,7 @@ window.onload = async () => {
         if (!user) return;
 
         uid = user.uid;
+        window.uid = user.uid;
         await checkBanStatus(uid)
         await finishAppLoad();
     });
@@ -718,7 +719,7 @@ function attachUIListeners() {
     }
 
     if (voiceBackBtnEl) {
-        voiceBackBtnEl.addEventListener("click", leaveVoiceChat);
+        voiceBackBtnEl.addEventListener("click", () => leaveVoiceChat());
     }
 }
 
@@ -1265,6 +1266,7 @@ async function joinServer() {
     switchServer(code);
     setupNotificationListener(code);
 }
+
 
 // ADD SERVER TO SIDEBAR
 function addServerToSidebar(code, name) {
@@ -1970,117 +1972,96 @@ async function loadAllMembers(code) {
 
 // VOICECHAT
 const peerConnections = {};
+const iceCandidateQueues = {};
+const processedCandidates = {}; 
+
 const rtcConfig = {
     iceServers: [
         { urls: "stun:stun.l.google.com:19302" },
-        { urls: "stun:stun1.l.google.com:19302" }
-    ]
+        { urls: "stun:stun1.l.google.com:19302" },
+        { urls: "stun:stun2.l.google.com:19302" }
+    ],
+    iceCandidatePoolSize: 10
 };
 
 async function joinVoiceChat(serverCode) {
+    if (!uid) uid = auth?.currentUser?.uid || window.uid;
+    if (!uid) return;
+
     if (currentVoiceServer && currentVoiceServer !== serverCode) {
-        leaveVoiceChat();
+        await leaveVoiceChat(currentVoiceServer, uid);
     }
 
-    await initLocalAudio();
+    const audioSuccess = await initLocalAudio();
+    if (!audioSuccess) return;
 
     currentVoiceServer = serverCode;
 
-    chatContainerEl.style.display = "none";
-    messageBarEl.style.display = "none";
-    guidelinesContainerEl.style.display = "none";
+    try {
+        await remove(ref(db, `servers/${serverCode}/signal/${uid}`));
+    } catch (err) {
+        console.warn("[VoiceChat] Signal inbox clear warning:", err);
+    }
+
+    if (chatContainerEl) chatContainerEl.style.display = "none";
+    if (messageBarEl) messageBarEl.style.display = "none";
+    if (guidelinesContainerEl) guidelinesContainerEl.style.display = "none";
     if (voiceContainerEl) voiceContainerEl.classList.remove("hidden");
 
     const voiceUserRef = ref(db, `servers/${serverCode}/voice/${uid}`);
-
-    onDisconnect(voiceUserRef).remove(writeOptions());
+    if (typeof onDisconnect === "function") {
+        onDisconnect(voiceUserRef).remove().catch(() => {});
+    }
 
     await set(voiceUserRef, {
-        username,
+        username: username || "Anonymous",
         joinedAt: serverTimestamp(),
         isMuted: false
-    }, writeOptions());
+    });
 
     listenToVoiceUsers(serverCode);
-    listenForSignals(serverCode);
 }
 
-async function leaveVoiceChat() {
-    const serverToClean = currentVoiceServer;
-
-    if (serverToClean && uid) {
-        const voiceUserRef = ref(db, `servers/${serverToClean}/voice/${uid}`);
-        await remove(voiceUserRef, writeOptions());
-
-        const mySignalRef = ref(db, `servers/${serverToClean}/signal/${uid}`);
-        await remove(mySignalRef, writeOptions());
+async function leaveVoiceChat(serverCode, myUid) {
+    if (typeof serverCode !== "string") {
+        serverCode = currentVoiceServer;
     }
+    if (typeof myUid !== "string") {
+        myUid = uid;
+    }
+
+    const activeServer = serverCode || currentVoiceServer;
+    const activeUid = myUid || uid;
 
     if (voiceUsersUnsub) {
         voiceUsersUnsub();
         voiceUsersUnsub = null;
     }
 
-    if (signalUnsub) {
-        signalUnsub();
-        signalUnsub = null;
-    }
-
-    currentVoiceServer = null;
-
-    const gridEl = document.querySelector(".voice-grid");
-    if (gridEl) gridEl.innerHTML = "";
+    Object.keys(peerConnections).forEach((remoteUid) => {
+        cleanupPeerConnection(remoteUid);
+    });
 
     if (localAudioStream) {
         localAudioStream.getTracks().forEach((track) => track.stop());
         localAudioStream = null;
     }
 
-    Object.keys(peerConnections).forEach((targetUid) => {
-        peerConnections[targetUid].close();
-        delete peerConnections[targetUid];
+    if (activeServer && activeUid) {
+        try {
+            await remove(ref(db, `servers/${activeServer}/voice/${activeUid}`));
+            await remove(ref(db, `servers/${activeServer}/signal/${activeUid}`));
+        } catch (err) {
+            console.error("Error clearing signaling data from Firebase:", err);
+        }
+    }
 
-        const audioEl = document.getElementById(`audio-${targetUid}`);
-        if (audioEl) audioEl.remove();
-    });
+    currentVoiceServer = null;
 
-    showChat();
-}
-
-function listenToVoiceUsers(serverCode) {
-    if (voiceUsersUnsub) voiceUsersUnsub();
-
-    const voiceRef = ref(db, `servers/${serverCode}/voice`);
-
-    voiceUsersUnsub = onValue(voiceRef, (snapshot) => {
-        const gridEl = document.querySelector(".voice-grid");
-        if (!gridEl) return;
-
-        gridEl.innerHTML = "";
-
-        if (!snapshot.exists()) return;
-
-        const users = snapshot.val();
-
-        Object.keys(users).forEach((userUid) => {
-            const userData = users[userUid];
-            const isSelf = userUid === uid;
-
-            if (!isSelf && !peerConnections[userUid]) {
-                createPeerConnection(userUid, true);
-            }
-
-            const card = document.createElement("div");
-            card.className = "voice-card";
-            card.id = `voice-card-${userUid}`;
-
-            card.innerHTML = `
-                <div class="username">${userData.username}${isSelf ? " (You)" : ""}</div>
-            `;
-
-            gridEl.appendChild(card);
-        });
-    });
+    if (voiceContainerEl) voiceContainerEl.classList.add("hidden");
+    if (currentServer) {
+        showChat();
+    }
 }
 
 async function initLocalAudio() {
@@ -2093,17 +2074,62 @@ async function initLocalAudio() {
             },
             video: false
         });
+        return true;
     } catch (err) {
         console.error("Microphone access denied or unavailable:", err);
         alert("Could not access microphone.");
+        return false;
     }
 }
 
-async function createPeerConnection(targetUid, isInitiator) {
-    if (peerConnections[targetUid]) return peerConnections[targetUid];
+function listenToVoiceUsers(serverCode) {
+    if (voiceUsersUnsub) voiceUsersUnsub();
 
+    const voiceRef = ref(db, `servers/${serverCode}/voice`);
+
+    voiceUsersUnsub = onValue(voiceRef, (snapshot) => {
+        const gridEl = document.querySelector(".voice-grid");
+        if (!gridEl) return;
+
+        gridEl.innerHTML = "";
+        if (!snapshot.exists()) return;
+
+        const users = snapshot.val();
+        const activeUids = Object.keys(users);
+
+        Object.keys(peerConnections).forEach((remoteUid) => {
+            if (!activeUids.includes(remoteUid)) {
+                cleanupPeerConnection(remoteUid);
+            }
+        });
+
+        activeUids.forEach((userUid) => {
+            const userData = users[userUid];
+            const isSelf = userUid === uid;
+
+            if (!isSelf && !peerConnections[userUid]) {
+                const isInitiator = uid < userUid;
+                createPeerConnection(userUid, isInitiator, serverCode);
+            }
+
+            const displayName = userData.username || "Anonymous";
+            const initial = displayName.charAt(0).toUpperCase();
+
+            const card = document.createElement("div");
+            card.className = "voice-card";
+            card.id = `voice-card-${userUid}`;
+            card.innerHTML = `
+                <div class="username">${displayName}${isSelf ? " (You)" : ""}</div>
+            `;
+
+            gridEl.appendChild(card);
+        });
+    });
+}
+
+function createPeerConnection(remoteUid, isInitiator, serverCode) {
     const pc = new RTCPeerConnection(rtcConfig);
-    peerConnections[targetUid] = pc;
+    peerConnections[remoteUid] = pc;
 
     if (localAudioStream) {
         localAudioStream.getTracks().forEach((track) => {
@@ -2112,73 +2138,152 @@ async function createPeerConnection(targetUid, isInitiator) {
     }
 
     pc.ontrack = (event) => {
-        let remoteAudioEl = document.getElementById(`audio-${targetUid}`);
-        if (!remoteAudioEl) {
-            remoteAudioEl = document.createElement("audio");
-            remoteAudioEl.id = `audio-${targetUid}`;
-            remoteAudioEl.autoplay = true;
-            document.body.appendChild(remoteAudioEl);
+        let audioEl = document.getElementById(`audio-${remoteUid}`);
+        if (!audioEl) {
+            audioEl = document.createElement("audio");
+            audioEl.id = `audio-${remoteUid}`;
+            audioEl.autoplay = true;
+            document.body.appendChild(audioEl);
         }
-        remoteAudioEl.srcObject = event.streams[0];
+        audioEl.srcObject = event.streams[0];
+        audioEl.play().catch((err) => console.warn("Autoplay blocked:", err));
     };
 
     pc.onicecandidate = (event) => {
         if (event.candidate) {
-            const candidateRef = push(ref(db, `servers/${currentVoiceServer}/signal/${targetUid}/${uid}/candidates`));
-            set(candidateRef, event.candidate.toJSON());
+            const candidateRef = ref(db, `servers/${serverCode}/signal/${remoteUid}/candidates`);
+            push(candidateRef, {
+                candidate: event.candidate.toJSON(),
+                fromUid: uid
+            });
         }
     };
 
-    if (isInitiator) {
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
+    listenForSignals(serverCode, remoteUid, pc);
 
-        const offerRef = ref(db, `servers/${currentVoiceServer}/signal/${targetUid}/${uid}/offer`);
-        await set(offerRef, { type: offer.type, sdp: offer.sdp });
+    if (isInitiator) {
+        pc.createOffer()
+            .then((offer) => pc.setLocalDescription(offer))
+            .then(() => {
+                const offerRef = ref(db, `servers/${serverCode}/signal/${remoteUid}/offers`);
+                push(offerRef, {
+                    sdp: pc.localDescription.sdp,
+                    type: pc.localDescription.type,
+                    fromUid: uid
+                });
+            })
+            .catch((err) => console.error("Error creating offer:", err));
     }
 
     return pc;
 }
 
-function listenForSignals(serverCode) {
-    if (signalUnsub) signalUnsub();
+function listenForSignals(serverCode, remoteUid, pc) {
+    const candidatesRef = ref(db, `servers/${serverCode}/signal/${uid}/candidates`);
+    const candUnsub = onChildAdded(candidatesRef, async (snapshot) => {
+        if (pc.signalingState === "closed") return;
+        
+        const candidateData = snapshot.val();
+        if (candidateData && candidateData.fromUid === remoteUid) {
+            const cand = candidateData.candidate;
+            if (pc.remoteDescription && pc.remoteDescription.type) {
+                try {
+                    await pc.addIceCandidate(new RTCIceCandidate(cand));
+                } catch (err) {
+                    console.warn("[WebRTC] Candidate error:", err);
+                }
+            } else {
+                if (!iceCandidateQueues[remoteUid]) iceCandidateQueues[remoteUid] = [];
+                iceCandidateQueues[remoteUid].push(cand);
+            }
+        }
+    });
 
-    const mySignalRef = ref(db, `servers/${serverCode}/signal/${uid}`);
+    const offerRef = ref(db, `servers/${serverCode}/signal/${uid}/offers`);
+    const offerUnsub = onChildAdded(offerRef, async (snapshot) => {
+        if (pc.signalingState === "closed") return;
 
-    signalUnsub = onValue(mySignalRef, async (snapshot) => {
-        if (!snapshot.exists()) return;
+        const offerData = snapshot.val();
+        if (offerData && offerData.fromUid === remoteUid) {
+            if (pc.signalingState !== "stable" && pc.signalingState !== "have-local-offer") return;
+            if (pc.currentRemoteDescription) return;
 
-        const incomingSignals = snapshot.val();
-
-        for (const senderUid of Object.keys(incomingSignals)) {
-            const signalData = incomingSignals[senderUid];
-
-            if (signalData.offer && !peerConnections[senderUid]) {
-                const pc = await createPeerConnection(senderUid, false);
-                await pc.setRemoteDescription(new RTCSessionDescription(signalData.offer));
+            try {
+                await pc.setRemoteDescription(new RTCSessionDescription(offerData));
+                await processQueuedCandidates(pc, remoteUid);
 
                 const answer = await pc.createAnswer();
                 await pc.setLocalDescription(answer);
 
-                const answerRef = ref(db, `servers/${serverCode}/signal/${senderUid}/${uid}/answer`);
-                await set(answerRef, { type: answer.type, sdp: answer.sdp });
-            }
-
-            if (signalData.answer && peerConnections[senderUid]) {
-                const pc = peerConnections[senderUid];
-                if (!pc.currentRemoteDescription) {
-                    await pc.setRemoteDescription(new RTCSessionDescription(signalData.answer));
-                }
-            }
-
-            if (signalData.candidates && peerConnections[senderUid]) {
-                const pc = peerConnections[senderUid];
-                Object.values(signalData.candidates).forEach((cand) => {
-                    pc.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {});
+                const answerRef = ref(db, `servers/${serverCode}/signal/${remoteUid}/answers`);
+                push(answerRef, {
+                    sdp: pc.localDescription.sdp,
+                    type: pc.localDescription.type,
+                    fromUid: uid
                 });
+            } catch (err) {
+                console.warn("[WebRTC] Offer processing error:", err);
             }
         }
     });
+
+    const answerRef = ref(db, `servers/${serverCode}/signal/${uid}/answers`);
+    const answerUnsub = onChildAdded(answerRef, async (snapshot) => {
+        if (pc.signalingState === "closed") return;
+
+        const answerData = snapshot.val();
+        if (answerData && answerData.fromUid === remoteUid) {
+            if (pc.signalingState !== "have-local-offer") return;
+
+            try {
+                await pc.setRemoteDescription(new RTCSessionDescription(answerData));
+                await processQueuedCandidates(pc, remoteUid);
+            } catch (err) {
+                console.warn("[WebRTC] Answer processing error:", err);
+            }
+        }
+    });
+
+    pc._signalUnsubs = [candUnsub, offerUnsub, answerUnsub];
+}
+
+async function processQueuedCandidates(pc, senderUid) {
+    if (pc.signalingState === "closed") return;
+
+    if (iceCandidateQueues[senderUid] && iceCandidateQueues[senderUid].length > 0) {
+        while (iceCandidateQueues[senderUid].length > 0) {
+            const candObj = iceCandidateQueues[senderUid].shift();
+            try {
+                if (pc.signalingState !== "closed") {
+                    await pc.addIceCandidate(new RTCIceCandidate(candObj));
+                }
+            } catch (err) {
+                console.warn("[WebRTC] Queued candidate error:", err);
+            }
+        }
+    }
+}
+
+function cleanupPeerConnection(targetUid) {
+    if (peerConnections[targetUid]) {
+        const pc = peerConnections[targetUid];
+        
+        if (pc._signalUnsubs) {
+            pc._signalUnsubs.forEach(unsub => {
+                if (typeof unsub === "function") unsub();
+            });
+        }
+
+        pc.ontrack = null;
+        pc.onicecandidate = null;
+        pc.close();
+        delete peerConnections[targetUid];
+    }
+    delete iceCandidateQueues[targetUid];
+    delete processedCandidates[targetUid];
+
+    const audioEl = document.getElementById(`audio-${targetUid}`);
+    if (audioEl) audioEl.remove();
 }
 
 
