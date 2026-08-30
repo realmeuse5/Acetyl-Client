@@ -1979,14 +1979,20 @@ const rtcConfig = {
     iceServers: [
         { urls: "stun:stun.l.google.com:19302" },
         { urls: "stun:stun1.l.google.com:19302" },
-        { urls: "stun:stun2.l.google.com:19302" }
+        { urls: "stun:stun2.l.google.com:19302" },
     ],
     iceCandidatePoolSize: 10
 };
 
 async function joinVoiceChat(serverCode) {
-    if (!uid) uid = auth?.currentUser?.uid || window.uid;
-    if (!uid) return;
+    if (!uid) {
+        uid = auth?.currentUser?.uid || window.uid;
+    }
+    
+    if (!uid) {
+        console.error("[VoiceChat] Cannot join voice chat: UID is undefined.");
+        return;
+    }
 
     if (currentVoiceServer && currentVoiceServer !== serverCode) {
         await leaveVoiceChat(currentVoiceServer, uid);
@@ -2113,7 +2119,6 @@ function listenToVoiceUsers(serverCode) {
             }
 
             const displayName = userData.username || "Anonymous";
-            const initial = displayName.charAt(0).toUpperCase();
 
             const card = document.createElement("div");
             card.className = "voice-card";
@@ -2143,6 +2148,7 @@ function createPeerConnection(remoteUid, isInitiator, serverCode) {
             audioEl = document.createElement("audio");
             audioEl.id = `audio-${remoteUid}`;
             audioEl.autoplay = true;
+            audioEl.playsInline = true; 
             document.body.appendChild(audioEl);
         }
         audioEl.srcObject = event.streams[0];
@@ -2151,7 +2157,7 @@ function createPeerConnection(remoteUid, isInitiator, serverCode) {
 
     pc.onicecandidate = (event) => {
         if (event.candidate) {
-            const candidateRef = ref(db, `servers/${serverCode}/signal/${remoteUid}/candidates`);
+            const candidateRef = ref(db, `servers/${serverCode}/signal/${remoteUid}/${uid}/candidates`);
             push(candidateRef, {
                 candidate: event.candidate.toJSON(),
                 fromUid: uid
@@ -2165,7 +2171,7 @@ function createPeerConnection(remoteUid, isInitiator, serverCode) {
         pc.createOffer()
             .then((offer) => pc.setLocalDescription(offer))
             .then(() => {
-                const offerRef = ref(db, `servers/${serverCode}/signal/${remoteUid}/offers`);
+                const offerRef = ref(db, `servers/${serverCode}/signal/${remoteUid}/${uid}/offers`);
                 push(offerRef, {
                     sdp: pc.localDescription.sdp,
                     type: pc.localDescription.type,
@@ -2179,12 +2185,12 @@ function createPeerConnection(remoteUid, isInitiator, serverCode) {
 }
 
 function listenForSignals(serverCode, remoteUid, pc) {
-    const candidatesRef = ref(db, `servers/${serverCode}/signal/${uid}/candidates`);
+    const candidatesRef = ref(db, `servers/${serverCode}/signal/${uid}/${remoteUid}/candidates`);
     const candUnsub = onChildAdded(candidatesRef, async (snapshot) => {
         if (pc.signalingState === "closed") return;
         
         const candidateData = snapshot.val();
-        if (candidateData && candidateData.fromUid === remoteUid) {
+        if (candidateData) {
             const cand = candidateData.candidate;
             if (pc.remoteDescription && pc.remoteDescription.type) {
                 try {
@@ -2199,12 +2205,12 @@ function listenForSignals(serverCode, remoteUid, pc) {
         }
     });
 
-    const offerRef = ref(db, `servers/${serverCode}/signal/${uid}/offers`);
+    const offerRef = ref(db, `servers/${serverCode}/signal/${uid}/${remoteUid}/offers`);
     const offerUnsub = onChildAdded(offerRef, async (snapshot) => {
         if (pc.signalingState === "closed") return;
 
         const offerData = snapshot.val();
-        if (offerData && offerData.fromUid === remoteUid) {
+        if (offerData) {
             if (pc.signalingState !== "stable" && pc.signalingState !== "have-local-offer") return;
             if (pc.currentRemoteDescription) return;
 
@@ -2215,7 +2221,7 @@ function listenForSignals(serverCode, remoteUid, pc) {
                 const answer = await pc.createAnswer();
                 await pc.setLocalDescription(answer);
 
-                const answerRef = ref(db, `servers/${serverCode}/signal/${remoteUid}/answers`);
+                const answerRef = ref(db, `servers/${serverCode}/signal/${remoteUid}/${uid}/answers`);
                 push(answerRef, {
                     sdp: pc.localDescription.sdp,
                     type: pc.localDescription.type,
@@ -2227,12 +2233,12 @@ function listenForSignals(serverCode, remoteUid, pc) {
         }
     });
 
-    const answerRef = ref(db, `servers/${serverCode}/signal/${uid}/answers`);
+    const answerRef = ref(db, `servers/${serverCode}/signal/${uid}/${remoteUid}/answers`);
     const answerUnsub = onChildAdded(answerRef, async (snapshot) => {
         if (pc.signalingState === "closed") return;
 
         const answerData = snapshot.val();
-        if (answerData && answerData.fromUid === remoteUid) {
+        if (answerData) {
             if (pc.signalingState !== "have-local-offer") return;
 
             try {
