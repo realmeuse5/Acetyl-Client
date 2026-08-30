@@ -2015,6 +2015,7 @@ async function loadAllMembers(code) {
 const peerConnections = {};
 const iceCandidateQueues = {};
 const processedCandidates = {}; 
+const activeAnalysers = {};
 
 const rtcConfig = {
     iceServers: [
@@ -2048,6 +2049,20 @@ async function joinVoiceChat(serverCode) {
         return;
     }
 
+    try {
+        const voiceSnapshot = await get(ref(db, `servers/${serverCode}/voice`));
+        if (voiceSnapshot.exists()) {
+            const users = voiceSnapshot.val();
+            const userCount = Object.keys(users).length;
+            if (!users[uid] && userCount >= 6) {
+                alert("This voice channel is full (maximum 6 people).");
+                return;
+            }
+        }
+    } catch (err) {
+        console.error("Error checking voice channel participant limit:", err);
+    }
+
     if (currentVoiceServer && currentVoiceServer !== serverCode) {
         await leaveVoiceChat(currentVoiceServer, uid);
     }
@@ -2079,6 +2094,7 @@ async function joinVoiceChat(serverCode) {
         joinedAt: serverTimestamp(),
         isMuted: false
     });
+    setupSpeakingIndicator(localAudioStream, uid);
 
     listenToVoiceUsers(serverCode);
 }
@@ -2209,6 +2225,8 @@ function createPeerConnection(remoteUid, isInitiator, serverCode) {
         }
         audioEl.srcObject = event.streams[0];
         audioEl.play().catch((err) => console.warn("Autoplay blocked:", err));
+
+        setupSpeakingIndicator(event.streams[0], remoteUid);
     };
 
     pc.onicecandidate = (event) => {
@@ -2343,6 +2361,8 @@ function cleanupPeerConnection(targetUid) {
     }
     delete iceCandidateQueues[targetUid];
     delete processedCandidates[targetUid];
+    
+    delete activeAnalysers[targetUid];
 
     const audioEl = document.getElementById(`audio-${targetUid}`);
     if (audioEl) audioEl.remove();
@@ -2362,6 +2382,50 @@ function updateServerVoiceIcons() {
         }
     });
 }
+
+function setupSpeakingIndicator(stream, userUid) {
+    try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 64;
+        
+        const source = audioCtx.createMediaStreamSource(stream);
+        source.connect(analyser);
+        
+        activeAnalysers[userUid] = { 
+            analyser, 
+            dataArray: new Uint8Array(analyser.frequencyBinCount) 
+        };
+    } catch (err) {
+        console.warn("Web Audio API setup failed:", err);
+    }
+}
+
+function updateSpeakingIndicators() {
+    requestAnimationFrame(updateSpeakingIndicators);
+
+    for (const [userUid, data] of Object.entries(activeAnalysers)) {
+        const { analyser, dataArray } = data;
+        analyser.getByteFrequencyData(dataArray);
+
+        let sum = 0;
+        for (let i = 0; i < dataArray.length; i++) {
+            sum += dataArray[i];
+        }
+        let average = sum / dataArray.length; // Range: 0 - 255
+        
+        const card = document.getElementById(`voice-card-${userUid}`);
+        if (card) {
+            if (average > 15) {
+                card.classList.add("speaking");
+            } else {
+                card.classList.remove("speaking");
+            }
+        }
+    }
+}
+
+requestAnimationFrame(updateSpeakingIndicators);
 
 
 // UTILITY
