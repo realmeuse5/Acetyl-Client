@@ -647,16 +647,11 @@ a {
     background-color: #3a3a40;
     cursor: pointer;
     transition:
-        background-color 0.15s ease,
         transform 0.15s ease;
 }
 
 #feedbackForm button:hover {
     background-color: #4a4a51;
-}
-
-#feedbackForm button:active {
-    transform: translateY(1px);
 }
 
 .submitArrow {
@@ -815,6 +810,39 @@ a {
     margin-bottom: 10px;
     color: #96979e;
     outline: #313135 solid 1px;
+}
+
+.msg-join-voice-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    width: 30%;
+    padding: 5px 0;
+    margin: 15px;
+    border: none;
+    border-radius: 8px;
+    font-family: "DM Sans", sans-serif;
+    font-size: 1rem;
+    font-weight: 500;
+    color: #ffffff;
+    background-color: #3a3a40;
+    cursor: pointer;
+    transition:
+        transform 0.15s ease;
+}
+
+.msg-join-voice-btn:hover {
+    background-color: #4a4a51;
+}
+
+.joinVoiceArrow {
+    font-size: 1.2rem;
+    transition: transform 0.15s ease;
+}
+
+.msg-join-voice-btn:hover .joinVoiceArrow {
+    transform: translateX(3px);
 }
 
 .hidden {
@@ -1138,7 +1166,7 @@ a {
 .voice-card {
     background: #222327;
     border: 1px solid #29292d;
-    border-radius: 12px;
+    border-radius: 12px;   
     display: flex;
     align-items: center;
     justify-content: center;

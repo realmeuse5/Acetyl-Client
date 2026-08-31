@@ -376,6 +376,8 @@ function attachUIListeners() {
                     bannedBy: uid
                 });
 
+                await sendBotMessage("public", `🫡 Farewell, @${targetUsername}. Your journey on Acetyl has come to an end (u got banned lol).`);
+
                 alert(`User ${targetUsername} has been banned.`);
                 break;
             }
@@ -490,9 +492,9 @@ function attachUIListeners() {
         showFeedbackForm();
     });
 
-    feedbackMessage.addEventListener("input", () => {
+    feedbackMessageEl.addEventListener("input", () => {
         feedbackCharCount.textContent =
-            `${feedbackMessage.value.length} / 2000`;
+            `${feedbackMessageEl.value.length} / 2000`;
     });
 
     submitFeedbackBtnEl.addEventListener("click", submitFeedback);
@@ -673,6 +675,8 @@ function attachUIListeners() {
             timestamp: Date.now(),
             bannedBy: uid
         });
+
+        await sendBotMessage("public", `🫡 Farewell, @${targetUsername}. Your journey on Acetyl has come to an end (u got banned lol).`);
 
         alert(`User ${targetUsername} has been banned.`);
         hideContextMenu();
@@ -914,6 +918,8 @@ async function toggleKickUser(serverId, targetUid, targetUsername) {
         await remove(ref(db, `servers/${serverId}/members/${targetUid}`), writeOptions());
         await remove(ref(db, `servers/${serverId}/activeUsers/${targetUid}`), writeOptions());
 
+        await sendBotMessage(serverId, `👋 See you later! @${targetUsername} was kicked from the server.`);
+
         alert(`User @${targetUsername} has been kicked from the server.`);
     }
 
@@ -1116,26 +1122,34 @@ function showGuidelines() {
 }
 
 function showFeedbackForm() {
-    guidelinesContainerEl.style.display = "block";
     chatContainerEl.style.display = "none";
     messageBarEl.style.display = "none";
+    guidelinesContainerEl.classList.remove("hidden");
+    guidelinesContainerEl.style.display = "block";
+    guidelinesEl.classList.add("hidden");
     guidelinesEl.style.display = "none";
-    feedbackFormEl.style.display = "block";
+    feedbackViewerEl.classList.add("hidden");
     feedbackViewerEl.style.display = "none";
+    feedbackFormEl.classList.remove("hidden");
+    feedbackFormEl.style.display = "flex";
     document.querySelectorAll(".tabBtn").forEach(btn => btn.classList.remove("active"));
     document.querySelectorAll(".serverRow").forEach(btn => btn.classList.remove("active"));
     guidelinesBtnEl.classList.add("active");
     feedbackMessageEl.value = "";
-    feedbackCategoryEl.value = "general";
+    feedbackCategoryEl.value = "Bug Report";
     voiceContainerEl.classList.add("hidden");
 }
 
 function showFeedbackViewer() {
-    guidelinesContainerEl.style.display = "block";
     chatContainerEl.style.display = "none";
     messageBarEl.style.display = "none";
+    guidelinesContainerEl.classList.remove("hidden");
+    guidelinesContainerEl.style.display = "block";
+    guidelinesEl.classList.add("hidden");
     guidelinesEl.style.display = "none";
+    feedbackFormEl.classList.add("hidden");
     feedbackFormEl.style.display = "none";
+    feedbackViewerEl.classList.remove("hidden");
     feedbackViewerEl.style.display = "block";
     document.querySelectorAll(".tabBtn").forEach(btn => btn.classList.remove("active"));
     document.querySelectorAll(".serverRow").forEach(btn => btn.classList.remove("active"));
@@ -1261,14 +1275,7 @@ async function createServer() {
     addServerToSidebar(code, name);
     switchServer(code);
 
-    await push(ref(db, `servers/${code}/messages`), {
-        text: `Server created. Your server code is: ${code}`,
-        username: "Server Bot",
-        uid: "system",
-        timestamp: Date.now(),
-        isAdmin: false,
-        isSystem: true
-    }, writeOptions());
+    await sendBotMessage(code, `Server created. Your server code is: ${code}`)
 }
 
 
@@ -1298,6 +1305,8 @@ async function joinServer() {
 
     let name = snapshot.val().name || `Server ${code}`;
     await set(ref(db, `servers/${code}/members/${uid}`), true, writeOptions());
+
+    await sendBotMessage(code, `👋 @${username} joined the server!`)
 
     addServerToSidebar(code, name);
     switchServer(code);
@@ -1601,6 +1610,23 @@ async function postAnnouncement() {
     attachedFileLabelEl.classList.add("hidden");
 }    
 
+async function sendBotMessage(serverId, text, action = null) {
+    if (!serverId) return;
+    try {
+        await push(ref(db, `servers/${serverId}/messages`), {
+            text, 
+            username: "Server Bot",
+            uid: "system",
+            timestamp: serverTimestamp(),
+            isAdmin: false,
+            isSystem: true,
+            action
+        }, writeOptions());
+    } catch (err) {
+        console.error("Failed to send server bot message:", err);
+    }
+}
+
 
 // MESSAGE LIMIT ENFORCEMENT
 async function enforceMessageLimit() {
@@ -1635,7 +1661,6 @@ async function enforceMessageLimit() {
 }
 
 
-// MESSAGE DISPLAY
 function displayMessage(msg, isGrouped) {
     const wrapper = document.createElement("div");
     wrapper.classList.add("message");
@@ -1714,12 +1739,23 @@ function displayMessage(msg, isGrouped) {
         wrapper.appendChild(header);
     }
 
-    // Text Content
     if (msg.text) {
         const textEl = document.createElement("span");
         textEl.classList.add("text");
         textEl.innerHTML = formatMessage(msg.text);
         wrapper.appendChild(textEl);
+    }
+
+    if (msg.action && msg.action.type === "JOIN_VOICE") {
+        const joinVoiceBtn = document.createElement("button");
+        joinVoiceBtn.classList.add("msg-join-voice-btn");
+        joinVoiceBtn.innerHTML = `Join Voice Chat <span class="joinVoiceArrow">▶</span>`;
+
+        joinVoiceBtn.addEventListener("click", () => {
+            joinVoiceChat(msg.action.serverCode);
+        });
+
+        wrapper.appendChild(joinVoiceBtn);
     }
 
     // File Content
@@ -2115,6 +2151,9 @@ async function joinVoiceChat(serverCode) {
         joinedAt: serverTimestamp(),
         isMuted: false
     });
+
+    await sendBotMessage(serverCode, `🔊 @${username} joined the voice chat!`, {type: "JOIN_VOICE",});
+
     setupSpeakingIndicator(localAudioStream, uid);
 
     listenToVoiceUsers(serverCode);
@@ -2656,6 +2695,8 @@ async function handleInvite() {
         if (uid) {
             await set(ref(db, `servers/${joinCode}/members/${uid}`), true, writeOptions());
         }
+
+        await sendBotMessage(joinCode, `👋 @${username} joined the server!`);
 
         addServerToSidebar(joinCode, serverName);
         switchServer(joinCode);
