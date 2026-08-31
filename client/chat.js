@@ -2017,27 +2017,41 @@ const iceCandidateQueues = {};
 const processedCandidates = {}; 
 const activeAnalysers = {};
 
-const rtcConfig = {
-    iceServers: [
-        { urls: "stun:stun.l.google.com:19302" },
-        { 
-            urls: "turn:openrelay.metered.ca:80",
-            username: "openrelayproject",
-            credential: "openrelayproject"
-        },
-        { 
-            urls: "turn:openrelay.metered.ca:443",
-            username: "openrelayproject",
-            credential: "openrelayproject"
-        },
-        { 
-            urls: "turns:openrelay.metered.ca:443",
-            username: "openrelayproject",
-            credential: "openrelayproject"
+let rtcConfig = null;
+
+async function getRtcConfig() {
+    try {
+        const response = await fetch(
+            "https://acetyl-turn.mbhongale0.workers.dev",
+            {
+                method: "GET",
+                cache: "no-store"
+            }
+        );
+
+        if (!response.ok) {
+            throw new Error(`TURN Worker returned HTTP ${response.status}`);
         }
-    ],
-    iceCandidatePoolSize: 10
-};
+
+        const data = await response.json();
+
+        if (!data.iceServers || !Array.isArray(data.iceServers)) {
+            throw new Error("Worker response does not contain valid iceServers.");
+        }
+
+        rtcConfig = {
+            iceServers: data.iceServers,
+            iceCandidatePoolSize: 10
+        };
+
+        console.log("[VoiceChat] Cloudflare TURN credentials loaded.");
+
+        return rtcConfig;
+    } catch (err) {
+        console.error("[VoiceChat] Failed to get Cloudflare TURN credentials:", err);
+        return null;
+    }
+}
 
 async function joinVoiceChat(serverCode) {
     if (!uid) {
@@ -2065,6 +2079,13 @@ async function joinVoiceChat(serverCode) {
 
     if (currentVoiceServer && currentVoiceServer !== serverCode) {
         await leaveVoiceChat(currentVoiceServer, uid);
+    }
+
+    const config = await getRtcConfig();
+
+    if (!config) {
+        alert("Could not connect to the voice server. Please try again.");
+        return;
     }
 
     const audioSuccess = await initLocalAudio();
@@ -2412,7 +2433,7 @@ function updateSpeakingIndicators() {
         for (let i = 0; i < dataArray.length; i++) {
             sum += dataArray[i];
         }
-        let average = sum / dataArray.length; // Range: 0 - 255
+        let average = sum / dataArray.length;
         
         const card = document.getElementById(`voice-card-${userUid}`);
         if (card) {
