@@ -2152,7 +2152,10 @@ async function joinVoiceChat(serverCode) {
         isMuted: false
     });
 
-    await sendBotMessage(serverCode, `🔊 @${username} joined the voice chat!`, {type: "JOIN_VOICE",});
+    await sendBotMessage(serverCode, `🔊 @${username} joined the voice chat!`, {
+        type: "JOIN_VOICE",
+        serverCode: serverCode
+    });
 
     setupSpeakingIndicator(localAudioStream, uid);
 
