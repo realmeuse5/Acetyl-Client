@@ -178,27 +178,9 @@
 }
 
 #section-4 a {
-    color: #96979e;
-    background: linear-gradient(90deg, #96979e 50%, #fff 50%);
-    background-size: 200% 100%;
-    background-position: 100% 0; 
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-    transition: background-position 1s ease;
+    color: #fff;
 }
 
 #section-4 a:hover {
-    background-position: 0% 0;
-}
-
-#section-4 i {
-    color: white;
-    font-size: 1.5rem;
-    vertical-align: top;
-    transform: translateY(1em);
-}
-
-#section-4 i:hover {
     color: #96979e;
 }

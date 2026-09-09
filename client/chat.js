@@ -462,20 +462,45 @@ function attachUIListeners() {
 
     fileInputEl.addEventListener("change", () => {
         const file = fileInputEl.files[0];
-        if (!file) return;
+        handleFileSelection(file);
+    });
 
-        const maxSize = 10 * 1024 * 1024;
-        if (file.size > maxSize) {
-            alert("File too large (max 10 MB).");
-            fileInputEl.value = "";
-            attachedFile = null;
-            attachedFileLabelEl.classList.add("hidden");
-            return;
+    messageInputEl.addEventListener("paste", (e) => {
+        const clipboardData = e.clipboardData || window.clipboardData;
+        if (!clipboardData || !clipboardData.files) return;
+
+        if (clipboardData.files.length > 0) {
+            const file = clipboardData.files[0];
+            
+            e.preventDefault();
+            
+            handleFileSelection(file);
         }
+    });
 
-        attachedFile = file;
-        attachedFileLabelEl.textContent = `Attached: ${file.name}`;
-        attachedFileLabelEl.classList.remove("hidden");
+    ["dragenter", "dragover", "dragleave", "drop"].forEach((eventName) => {
+        webContainerEl.addEventListener(eventName, (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+        });
+    });
+
+    webContainerEl.addEventListener("dragover", () => {
+        webContainerEl.classList.add("drag-over");
+    });
+
+    ["dragleave", "drop"].forEach((eventName) => {
+        webContainerEl.addEventListener(eventName, () => {
+            webContainerEl.classList.remove("drag-over");
+        });
+    });
+
+    webContainerEl.addEventListener("drop", (e) => {
+        const dt = e.dataTransfer;
+        if (dt && dt.files && dt.files.length > 0) {
+            const file = dt.files[0];
+            handleFileSelection(file);
+        }
     });
 
     guidelinesBtnEl.addEventListener("click", () => {
@@ -755,11 +780,12 @@ function attachUIListeners() {
                 await set(voiceUserRef, {
                     username: username || "Anonymous",
                     joinedAt: serverTimestamp(),
-                    isMuted: isMuted
+                    isMuted: isMuted,
+                    msgKey: msgKey
                 });
             }
         });
-    }
+    }   
 }
 
 
@@ -1110,11 +1136,21 @@ function showChat() {
 function showGuidelines() {
     guidelinesContainerEl.classList.remove("hidden");
     guidelinesContainerEl.style.display = "block";
+    
+    // Unhide and display the guidelines content
+    guidelinesEl.classList.remove("hidden");
+    guidelinesEl.style.display = "block";
+
+    // Hide feedback form & viewer
+    feedbackFormEl.classList.add("hidden");
+    feedbackFormEl.style.display = "none";
+    feedbackViewerEl.classList.add("hidden");
+    feedbackViewerEl.style.display = "none";
+
+    // Hide chat & message bar
     chatContainerEl.style.display = "none";
     messageBarEl.style.display = "none";
-    guidelinesEl.style.display = "block";
-    feedbackFormEl.style.display = "none";
-    feedbackViewerEl.style.display = "none";
+
     document.querySelectorAll(".tabBtn").forEach(btn => btn.classList.remove("active"));
     document.querySelectorAll(".serverRow").forEach(btn => btn.classList.remove("active"));
     guidelinesBtnEl.classList.add("active");
@@ -1454,6 +1490,23 @@ async function uploadFile(file) {
     return base + data.url; // full public URL
 }
 
+function handleFileSelection(file) {
+    if (!file) return;
+
+    const maxSize = 10 * 1024 * 1024;
+    if (file.size > maxSize) {
+        alert("File too large (max 10 MB).");
+        fileInputEl.value = "";
+        attachedFile = null;
+        attachedFileLabelEl.classList.add("hidden");
+        return;
+    }
+
+    attachedFile = file;
+    attachedFileLabelEl.textContent = `Attached: ${file.name}`;
+    attachedFileLabelEl.classList.remove("hidden");
+}
+
 
 // MESSAGE SENDING
 async function sendMessage() {
@@ -1611,9 +1664,12 @@ async function postAnnouncement() {
 }    
 
 async function sendBotMessage(serverId, text, action = null) {
-    if (!serverId) return;
+    if (!serverId) return null;
     try {
-        await push(ref(db, `servers/${serverId}/messages`), {
+        const messagesRef = ref(db, `servers/${serverId}/messages`);
+        const newMsgRef = push(messagesRef);
+
+        await set(newMsgRef, {
             text, 
             username: "Server Bot",
             uid: "system",
@@ -1621,9 +1677,12 @@ async function sendBotMessage(serverId, text, action = null) {
             isAdmin: false,
             isSystem: true,
             action
-        }, writeOptions());
+        });
+
+        return newMsgRef;
     } catch (err) {
         console.error("Failed to send server bot message:", err);
+        return null;
     }
 }
 
@@ -2054,6 +2113,7 @@ const processedCandidates = {};
 const activeAnalysers = {};
 
 let rtcConfig = null;
+let globalAudioCtx = null;
 
 async function getRtcConfig() {
     try {
@@ -2141,20 +2201,28 @@ async function joinVoiceChat(serverCode) {
     if (guidelinesContainerEl) guidelinesContainerEl.style.display = "none";
     if (voiceContainerEl) voiceContainerEl.classList.remove("hidden");
 
+    const botMsgRef = await sendBotMessage(serverCode, `🔊 @${username} is currently in voice chat`, {
+        type: "JOIN_VOICE",
+        serverCode: serverCode
+    });
+
+    const msgKey = botMsgRef ? botMsgRef.key : null;
+
     const voiceUserRef = ref(db, `servers/${serverCode}/voice/${uid}`);
     if (typeof onDisconnect === "function") {
         onDisconnect(voiceUserRef).remove().catch(() => {});
+        
+        if (msgKey) {
+            const msgRef = ref(db, `servers/${serverCode}/messages/${msgKey}`);
+            onDisconnect(msgRef).remove().catch(() => {});
+        }
     }
 
     await set(voiceUserRef, {
-        username: username || "Anonymous",
+        username: username,
         joinedAt: serverTimestamp(),
-        isMuted: false
-    });
-
-    await sendBotMessage(serverCode, `🔊 @${username} joined the voice chat!`, {
-        type: "JOIN_VOICE",
-        serverCode: serverCode
+        isMuted: false,
+        msgKey: msgKey
     });
 
     setupSpeakingIndicator(localAudioStream, uid);
@@ -2182,6 +2250,17 @@ async function leaveVoiceChat(serverCode, myUid) {
         cleanupPeerConnection(remoteUid);
     });
 
+    if (activeUid && activeAnalysers[activeUid]) {
+        try {
+            if (activeAnalysers[activeUid].source) {
+                activeAnalysers[activeUid].source.disconnect();
+            }
+        } catch (err) {
+            console.warn("[VoiceChat] Error disconnecting local Web Audio source:", err);
+        }
+        delete activeAnalysers[activeUid];
+    }
+
     if (localAudioStream) {
         localAudioStream.getTracks().forEach((track) => track.stop());
         localAudioStream = null;
@@ -2189,10 +2268,20 @@ async function leaveVoiceChat(serverCode, myUid) {
 
     if (activeServer && activeUid) {
         try {
-            await remove(ref(db, `servers/${activeServer}/voice/${activeUid}`));
+            const userVoiceRef = ref(db, `servers/${activeServer}/voice/${activeUid}`);
+            const userVoiceSnap = await get(userVoiceRef);
+
+            if (userVoiceSnap.exists()) {
+                const voiceData = userVoiceSnap.val();
+                if (voiceData.msgKey) {
+                    await remove(ref(db, `servers/${activeServer}/messages/${voiceData.msgKey}`));
+                }
+            }
+
+            await remove(userVoiceRef);
             await remove(ref(db, `servers/${activeServer}/signal/${activeUid}`));
         } catch (err) {
-            console.error("Error clearing signaling data from Firebase:", err);
+            console.error("Error clearing voice session & message data from Firebase:", err);
         }
     }
 
@@ -2420,15 +2509,29 @@ function cleanupPeerConnection(targetUid) {
         pc.ontrack = null;
         pc.onicecandidate = null;
         pc.close();
+        
         delete peerConnections[targetUid];
     }
+
+    if (activeAnalysers[targetUid]) {
+        try {
+            if (activeAnalysers[targetUid].source) {
+                activeAnalysers[targetUid].source.disconnect();
+            }
+        } catch (err) {
+            console.warn("[VoiceChat] Error disconnecting Web Audio source:", err);
+        }
+        delete activeAnalysers[targetUid];
+    }
+
     delete iceCandidateQueues[targetUid];
     delete processedCandidates[targetUid];
-    
-    delete activeAnalysers[targetUid];
 
     const audioEl = document.getElementById(`audio-${targetUid}`);
-    if (audioEl) audioEl.remove();
+    if (audioEl) {
+        audioEl.srcObject = null;
+        audioEl.remove();
+    }
 }
 
 function updateServerVoiceIcons() {
@@ -2448,16 +2551,22 @@ function updateServerVoiceIcons() {
 
 function setupSpeakingIndicator(stream, userUid) {
     try {
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        const analyser = audioCtx.createAnalyser();
+        if (!globalAudioCtx) {
+            globalAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (globalAudioCtx.state === "suspended") {
+            globalAudioCtx.resume();
+        }
+        const analyser = globalAudioCtx.createAnalyser();
         analyser.fftSize = 64;
         
-        const source = audioCtx.createMediaStreamSource(stream);
+        const source = globalAudioCtx.createMediaStreamSource(stream);
         source.connect(analyser);
         
         activeAnalysers[userUid] = { 
             analyser, 
-            dataArray: new Uint8Array(analyser.frequencyBinCount) 
+            dataArray: new Uint8Array(analyser.frequencyBinCount),
+            source 
         };
     } catch (err) {
         console.warn("Web Audio API setup failed:", err);
