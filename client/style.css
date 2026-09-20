@@ -426,6 +426,10 @@ a {
     margin: 0;
 }
 
+.systemGear {
+    transform: scale(1) !important;
+}
+
 .serverName {
     color: #96979e;
     margin-left: 15px;

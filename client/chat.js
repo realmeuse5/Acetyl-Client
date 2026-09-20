@@ -87,6 +87,7 @@ let contextJoinVoiceBtnEl
 let voiceContainerEl
 let voiceBackBtnEl
 let voiceMuteBtnEl
+let systemContainerEl;
 
 function writeOptions() { return { auth: { uid } }; }
 
@@ -146,6 +147,7 @@ window.onload = async () => {
     voiceContainerEl = document.getElementById("voice-container")
     voiceBackBtnEl = document.getElementById("voiceBackBtn");
     voiceMuteBtnEl = document.getElementById("voiceMuteBtn");
+    systemContainerEl = document.getElementById("systemContainer")
 
     if (noAuthMode) {
         uid = localStorage.getItem("fakeUid");
@@ -285,6 +287,10 @@ async function validateSavedServers() {
 
     for (const server of myServers) {
         const { code, name } = server;
+        if (code === "system") {
+            validServers.push({ code, name });
+            continue;
+        }
         const serverRef = ref(db, `servers/${code}`);
         const snapshot = await get(serverRef);
 
@@ -957,6 +963,14 @@ async function toggleKickUser(serverId, targetUid, targetUsername) {
 
 // SERVER SWITCHING
 async function switchServer(serverId) {
+    if (serverId === "system") {
+        currentServer = "system";
+        highlightActiveServer("system");
+        if (unsubscribe) unsubscribe();
+        showSystemSettings();
+        return;
+    }
+
     if (serverId === "announcements") {
         currentServer = "announcements";
         highlightActiveServer("announcements");
@@ -1136,25 +1150,41 @@ function showChat() {
 function showGuidelines() {
     guidelinesContainerEl.classList.remove("hidden");
     guidelinesContainerEl.style.display = "block";
-    
-    // Unhide and display the guidelines content
     guidelinesEl.classList.remove("hidden");
     guidelinesEl.style.display = "block";
-
-    // Hide feedback form & viewer
     feedbackFormEl.classList.add("hidden");
     feedbackFormEl.style.display = "none";
     feedbackViewerEl.classList.add("hidden");
     feedbackViewerEl.style.display = "none";
-
-    // Hide chat & message bar
     chatContainerEl.style.display = "none";
     messageBarEl.style.display = "none";
-
     document.querySelectorAll(".tabBtn").forEach(btn => btn.classList.remove("active"));
     document.querySelectorAll(".serverRow").forEach(btn => btn.classList.remove("active"));
     guidelinesBtnEl.classList.add("active");
     voiceContainerEl.classList.add("hidden");
+}
+
+function showSystemSettings() {
+    chatContainerEl.style.display = "none";
+    messageBarEl.style.display = "none";
+    if(guidelinesContainerEl) {
+        guidelinesContainerEl.classList.add("hidden");
+        guidelinesContainerEl.style.display = "none";
+    }
+    if(voiceContainerEl) voiceContainerEl.classList.add("hidden");
+    if(feedbackFormEl) {
+        feedbackFormEl.classList.add("hidden");
+        feedbackFormEl.style.display = "none";
+    }
+    if(feedbackViewerEl) {
+        feedbackViewerEl.classList.add("hidden");
+        feedbackViewerEl.style.display = "none";
+    }
+
+    systemContainerEl.classList.remove("hidden");
+    systemContainerEl.style.display = "block";
+
+    document.querySelectorAll(".tabBtn").forEach(btn => btn.classList.remove("active"));
 }
 
 function showFeedbackForm() {
@@ -1325,6 +1355,12 @@ async function joinServer() {
         return;
     }
 
+    if (code === "system") {
+        addServerToSidebar("system", "System");
+        switchServer("system");
+        return;
+    }
+
     const kickSnap = await get(ref(db, `servers/${code}/kicked/${uid}`));
     if (kickSnap.exists()) {
         alert("You have been kicked from this server.");
@@ -1376,9 +1412,14 @@ function addServerToSidebar(code, name) {
 
     const hashEl = document.createElement("span");
     hashEl.classList.add("serverHash");
-    if (code === currentVoiceServer) {
+    if (code === "system") {
+        hashEl.classList.add("serverHash", "systemGear");
+        hashEl.innerHTML = `<i class="fa-solid fa-gear"></i>`;
+    } else if (code === currentVoiceServer) {
+        hashEl.classList.add("serverHash");
         hashEl.innerHTML = `<i class="fa-solid fa-volume"></i>`;
     } else {
+        hashEl.classList.add("serverHash");
         hashEl.textContent = "#";
     }
 
@@ -1407,6 +1448,23 @@ async function leaveServer(code) {
     if (!confirm("Are you sure you want to leave this server?")) return;
     if (code === "public") {
         alert("You cannot leave the public server.");
+        return;
+    }
+
+    if (code === "system") {
+        myServers = myServers.filter(s => s.code !== "system");
+        localStorage.setItem("myServers", JSON.stringify(myServers));
+
+        const row = [...serverListEl.children].find(r => r.dataset.server === "system");
+        if (row) row.remove();
+
+        if (notificationUnsubs["system"]) {
+            notificationUnsubs["system"]();
+            delete notificationUnsubs["system"];
+        }
+
+        switchServer("public");
+        updateNoServersMessage();
         return;
     }
 
