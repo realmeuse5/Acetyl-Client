@@ -64,7 +64,7 @@
         </div>
 
         <div id="main">
-            <div id="chatContainer">
+            <div id="chatContainer" class="app-view">
                 <div id="messages"></div>
             </div>
 
@@ -78,7 +78,7 @@
                 </div>
             </div>
 
-            <div id="guidelinesContainer" class="hidden">
+            <div id="guidelinesContainer" class="hidden app-view">
                 <div id="guidelines">
                     <div id="guidelinesHeader">
                         <img src="Assets/favicon.svg">
@@ -112,7 +112,7 @@
                     <p><em>Note: This license permits noncommercial use, studying the codebase, and self-hosting personal instances, but strictly prohibits commercial use or selling. For full details on trademarks, proprietary media assets, and usage rules, review our complete <a href="/legal/" target="_blank">Legal Notice</a>.</em></p>
                 </div>
 
-                <div id="feedbackForm" class="hidden">
+                <div id="feedbackForm" class="hidden app-view">
                     <h1>Submit Feedback</h1>
                     <p>
                         Found a bug, have an idea, or need help? Let us know.
@@ -159,10 +159,10 @@
                     </div>
                     
                 </div>
-                <div id="feedbackViewer" class="hidden"></div>
+                <div id="feedbackViewer" class="hidden app-view"></div>
             </div>
 
-            <div id="voice-container" class="hidden">
+            <div id="voice-container" class="hidden app-view">
                 <div id="voiceHeader">
                     <button id="voiceBackBtn">◀ Leave Voice Chat</button>
                     <button id="voiceMuteBtn" title="Mute"><i class="fa-solid fa-microphone"></i></button>
@@ -171,9 +171,45 @@
                 <div class="voice-grid"></div>
             </div>
 
-            <div id="systemContainer" class="hidden">
-                <!--Stuff here-->
-                <h1>system server is still being made... in the mean time, you can watch a preview of what it will look like in the future here: https://www.youtube.com/watch?v=xvFZjo5PgG0</h1>
+            <div id="systemContainer" class="hidden app-view">
+                <h1>System Settings</h1>
+
+                <label class="setting-item">
+                    <span>High Contrast Mode</span>
+                    <input type="checkbox" id="setting-high-contrast">
+                </label>
+                <label class="setting-item">
+                    <span>New Message Sound</span>
+                    <input type="checkbox" id="setting-message-sound">
+                </label>
+                <label class="setting-item">
+                    <span>Notifications</span>
+                    <input type="checkbox" id="setting-notifications">
+                </label>
+                <label class="setting-item">
+                    <span>Unread Messages</span>
+                    <input type="checkbox" id="setting-unread-badge">
+                </label>
+                <hr>
+                <div class="setting-item">
+                <span>Default Startup Server</span>
+                <select id="setting-startup-server">
+                    <option value="public"># Public</option>
+                    <!-- Dynamically populated -->
+                </select>
+                </div>
+                <label class="setting-item">
+                    <span>Right Sidebar on Startup</span>
+                    <input type="checkbox" id="setting-startup-sidebar">
+                </label>
+                <hr>
+                <label class="setting-item">
+                    <span>Use Cloudflare TURN Server for VC</span>
+                    <input type="checkbox" id="setting-cloudflare-turn">
+                </label>
+                <div class="setting-item">
+                    <span>Account Recovery</span>
+                </div>
             </div>
         </div>
 
@@ -199,5 +235,5 @@
 <script type="module" src="./firebase-init.js"></script>
 <script type="module" src="./chat.js"></script>
 
-</body>
+</body> 
 </html>

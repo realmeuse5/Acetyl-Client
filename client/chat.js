@@ -32,6 +32,8 @@ let voiceUsersUnsub = null;
 let localAudioStream = null;
 let signalUnsub = null;
 let isMuted = false;
+let currentVoiceMsgKey = null;
+let views;
 
 
 // UI ELEMENTS
@@ -149,6 +151,15 @@ window.onload = async () => {
     voiceMuteBtnEl = document.getElementById("voiceMuteBtn");
     systemContainerEl = document.getElementById("systemContainer")
 
+    views = {
+        chat: [chatContainerEl, messageBarEl],
+        guidelines: [guidelinesContainerEl, guidelinesEl],
+        feedbackForm: [guidelinesContainerEl, feedbackFormEl],
+        feedbackViewer: [guidelinesContainerEl, feedbackViewerEl],
+        voice: [voiceContainerEl],
+        system: [systemContainerEl]
+    };
+
     if (noAuthMode) {
         uid = localStorage.getItem("fakeUid");
         if (!uid) {
@@ -169,6 +180,7 @@ window.onload = async () => {
         await checkBanStatus(uid)
         await finishAppLoad();
     });
+
 };
 
 async function finishAppLoad() {
@@ -189,7 +201,7 @@ async function finishAppLoad() {
         );
         await set(ref(db, `users/${uid}/username`), username, writeOptions());
         localStorage.setItem("username", username);
-        showGuidelines();
+        switchView("guidelines");
     } else {
         const handledInvite = await handleInvite();
         if (!handledInvite) switchServer("public");
@@ -374,7 +386,7 @@ function attachUIListeners() {
             }
 
             case "/feedback": 
-                showFeedbackViewer();
+                switchView("feedbackViewer");
                 loadFeedback();
                 break;
 
@@ -495,22 +507,21 @@ function attachUIListeners() {
     });
 
     guidelinesBtnEl.addEventListener("click", () => {
-        showGuidelines();
+        switchView("guidelines");
     });
 
     feedbackFormLinkEl.addEventListener("click", (e) => {
         e.preventDefault();
-        showFeedbackForm();
+        switchView("feedbackForm");
     });
 
     feedbackFormLink2El.addEventListener("click", (e) => {
         e.preventDefault();
-        showFeedbackForm();
+        switchView("feedbackForm");
     });
 
     feedbackMessageEl.addEventListener("input", () => {
-        feedbackCharCount.textContent =
-            `${feedbackMessageEl.value.length} / 2000`;
+        feedbackCharCountEl.textContent = `${feedbackMessageEl.value.length} / 2000`;
     });
 
     submitFeedbackBtnEl.addEventListener("click", submitFeedback);
@@ -772,7 +783,7 @@ function attachUIListeners() {
                     username: username || "Anonymous",
                     joinedAt: serverTimestamp(),
                     isMuted: isMuted,
-                    msgKey: msgKey
+                    msgKey: currentVoiceMsgKey
                 });
             }
         });
@@ -854,7 +865,7 @@ async function checkBanStatus(userUid) {
         const banData = banSnap.val();
 
         if (banData.duration && banData.timestamp) {
-            const banEndTime = banData.timestamp + banData.duration * 1000; // duration stored in seconds
+            const banEndTime = banData.timestamp + banData.duration * 1000;
             const remainingMs = banEndTime - Date.now();
 
             if (remainingMs > 0) {
@@ -884,6 +895,7 @@ async function checkBanStatus(userUid) {
         }
     });
 }
+
 
 // KICKING USERS
 async function toggleKickUser(serverId, targetUid, targetUsername) {
@@ -957,14 +969,13 @@ async function switchServer(serverId) {
         if (unsubscribe) unsubscribe();
 
         currentServer = "system";
+        switchView("system");
         highlightActiveServer("system");
-        showSystemSettings();
         return;
     }
 
     if (serverId === "announcements") {
         currentServer = "announcements";
-        highlightActiveServer("announcements");
 
         if (isAdmin) {
             messageInputEl.disabled = false;
@@ -979,9 +990,9 @@ async function switchServer(serverId) {
         if (unsubscribe) unsubscribe();
 
         messagesRef = ref(db, "servers/announcements/messages");
-        
+
         const announcementsQuery = query(messagesRef, orderByChild("timestamp"));
-        
+
         messagesListEl.innerHTML = "";
         lastMessage = null;
 
@@ -990,7 +1001,8 @@ async function switchServer(serverId) {
             displayAnnouncement(msg);
         });
 
-        showChat();
+        switchView("chat");
+        highlightActiveServer("announcements");
         return;
     }
 
@@ -1040,7 +1052,6 @@ async function switchServer(serverId) {
     }
 
     setupPresence(serverId);
-    highlightActiveServer(serverId);
     if (unsubscribe) unsubscribe();
 
     unreadCounts[serverId] = 0;
@@ -1093,14 +1104,16 @@ async function switchServer(serverId) {
     if (currentVoiceServer === serverId) {
         joinVoiceChat(serverId);
     } else {
-        showChat();
+        switchView("chat");
     }
+    highlightActiveServer(serverId);
 
     setupActiveUserListener(serverId);
     if (rightSidebarEl && getComputedStyle(rightSidebarEl).display !== "none") {
         loadAllMembers(serverId);
     }
     markServerAsRead(serverId);
+
 }
 
 function highlightActiveServer(serverId) {
@@ -1112,106 +1125,49 @@ function highlightActiveServer(serverId) {
         }
     });
 
-    if (serverId === "public") {
-        publicServerBtnEl.classList.add("active");
-    } else {
-        publicServerBtnEl.classList.remove("active");
-    }
-
-    if (serverId === "announcements") {
-        announcementsBtnEl.classList.add("active");
-    } else {
-        announcementsBtnEl.classList.remove("active");
-    }
+    publicServerBtnEl?.classList.toggle("active", serverId === "public");
+    announcementsBtnEl?.classList.toggle("active", serverId === "announcements");
 }
 
 function updatePlaceholder(serverName) {
     messageInputEl.setAttribute("data-placeholder", `Message #${serverName}`);
 }
 
-function showChat() {
-    chatContainerEl.style.display = "flex";
-    messageBarEl.style.display = "flex";
-    guidelinesContainerEl.classList.add("hidden");
-    guidelinesContainerEl.style.display = "none";
-    voiceContainerEl.classList.add("hidden");
-    guidelinesBtnEl.classList.remove("active");
-}
-
-function showGuidelines() {
-    guidelinesContainerEl.classList.remove("hidden");
-    guidelinesContainerEl.style.display = "block";
-    guidelinesEl.classList.remove("hidden");
-    guidelinesEl.style.display = "block";
-    feedbackFormEl.classList.add("hidden");
-    feedbackFormEl.style.display = "none";
-    feedbackViewerEl.classList.add("hidden");
-    feedbackViewerEl.style.display = "none";
-    chatContainerEl.style.display = "none";
-    messageBarEl.style.display = "none";
-    document.querySelectorAll(".tabBtn").forEach(btn => btn.classList.remove("active"));
-    document.querySelectorAll(".serverRow").forEach(btn => btn.classList.remove("active"));
-    guidelinesBtnEl.classList.add("active");
-    voiceContainerEl.classList.add("hidden");
-}
-
-function showSystemSettings() {
-    chatContainerEl.style.display = "none";
-    messageBarEl.style.display = "none";
-    if(guidelinesContainerEl) {
-        guidelinesContainerEl.classList.add("hidden");
-        guidelinesContainerEl.style.display = "none";
-    }
-    if(voiceContainerEl) voiceContainerEl.classList.add("hidden");
-    if(feedbackFormEl) {
-        feedbackFormEl.classList.add("hidden");
-        feedbackFormEl.style.display = "none";
-    }
-    if(feedbackViewerEl) {
-        feedbackViewerEl.classList.add("hidden");
-        feedbackViewerEl.style.display = "none";
+function switchView(targetView) {
+    if (!views || !views[targetView]) {
+        console.warn(`[View] Unknown view: ${targetView}`);
+        return;
     }
 
-    systemContainerEl.classList.remove("hidden");
-    systemContainerEl.style.display = "block";
+    Object.values(views).forEach(elements => {
+        elements.forEach(el => {
+            if (!el) return;
+            el.classList.remove("active");
+            el.classList.add("hidden");
+        });
+    });
 
-    document.querySelectorAll(".tabBtn").forEach(btn => btn.classList.remove("active"));
-}
+    views[targetView].forEach(el => {
+        if (!el) return;
+        el.classList.remove("hidden");
+        el.classList.add("active");
+    });
 
-function showFeedbackForm() {
-    chatContainerEl.style.display = "none";
-    messageBarEl.style.display = "none";
-    guidelinesContainerEl.classList.remove("hidden");
-    guidelinesContainerEl.style.display = "block";
-    guidelinesEl.classList.add("hidden");
-    guidelinesEl.style.display = "none";
-    feedbackViewerEl.classList.add("hidden");
-    feedbackViewerEl.style.display = "none";
-    feedbackFormEl.classList.remove("hidden");
-    feedbackFormEl.style.display = "flex";
-    document.querySelectorAll(".tabBtn").forEach(btn => btn.classList.remove("active"));
-    document.querySelectorAll(".serverRow").forEach(btn => btn.classList.remove("active"));
-    guidelinesBtnEl.classList.add("active");
-    feedbackMessageEl.value = "";
-    feedbackCategoryEl.value = "Bug Report";
-    voiceContainerEl.classList.add("hidden");
-}
+    document
+        .querySelectorAll(".tabBtn")
+        .forEach(btn => btn.classList.remove("active"));
 
-function showFeedbackViewer() {
-    chatContainerEl.style.display = "none";
-    messageBarEl.style.display = "none";
-    guidelinesContainerEl.classList.remove("hidden");
-    guidelinesContainerEl.style.display = "block";
-    guidelinesEl.classList.add("hidden");
-    guidelinesEl.style.display = "none";
-    feedbackFormEl.classList.add("hidden");
-    feedbackFormEl.style.display = "none";
-    feedbackViewerEl.classList.remove("hidden");
-    feedbackViewerEl.style.display = "block";
-    document.querySelectorAll(".tabBtn").forEach(btn => btn.classList.remove("active"));
-    document.querySelectorAll(".serverRow").forEach(btn => btn.classList.remove("active"));
-    guidelinesBtnEl.classList.add("active");
-    voiceContainerEl.classList.add("hidden");
+    if (["guidelines", "feedbackForm", "feedbackViewer"].includes(targetView)) {
+        guidelinesBtnEl?.classList.add("active");
+    }
+
+    if (targetView === "feedbackForm") {
+        if (feedbackMessageEl) feedbackMessageEl.value = "";
+        if (feedbackCategoryEl) feedbackCategoryEl.value = "Bug Report";
+        if (feedbackCharCountEl) {
+            feedbackCharCountEl.textContent = "0 / 2000";
+        }
+    }
 }
 
 async function submitFeedback() {
@@ -1241,7 +1197,7 @@ async function submitFeedback() {
     await set(feedbackRef, feedbackData);
 
     alert("Thank you! Your feedback has been submitted.");
-    showGuidelines();
+    switchView("guidelines");
 }
 
 async function loadFeedback() {
@@ -1536,7 +1492,7 @@ async function uploadFile(file) {
 
     const data = await res.json(); 
     const base = UPLOAD_URL.replace("/upload", "");
-    return base + data.url; // full public URL
+    return base + data.url;
 }
 
 function handleFileSelection(file) {
@@ -1613,7 +1569,7 @@ async function sendMessage() {
             text: dm.messageBody || null,
             username,
             uid: uid || "no-auth",
-            timestamp: Date.now(),
+            timestamp: serverTimestamp(),
             isAdmin: isAdmin || false,
             isDM: true,
             dmToUid: targetUid,
@@ -1642,7 +1598,6 @@ async function sendMessage() {
         enforceMessageLimit();
     }
 
-    // Reset UI
     messageInputEl.innerHTML = "";
     attachedFile = null;
     fileInputEl.value = "";
@@ -1671,7 +1626,7 @@ async function postAnnouncement() {
     if (!noAuthMode && !uid) return;
 
     if (!body && !file) return;
-    if (body && body.length > 2000) return; // announcements can be longer
+    if (body && body.length > 2000) return;
 
     let fileUrl = null;
     let fileName = null;
@@ -2245,24 +2200,21 @@ async function joinVoiceChat(serverCode) {
         console.warn("[VoiceChat] Signal inbox clear warning:", err);
     }
 
-    if (chatContainerEl) chatContainerEl.style.display = "none";
-    if (messageBarEl) messageBarEl.style.display = "none";
-    if (guidelinesContainerEl) guidelinesContainerEl.style.display = "none";
-    if (voiceContainerEl) voiceContainerEl.classList.remove("hidden");
+    switchView("voice");
 
     const botMsgRef = await sendBotMessage(serverCode, `🔊 @${username} is currently in voice chat`, {
         type: "JOIN_VOICE",
         serverCode: serverCode
     });
 
-    const msgKey = botMsgRef ? botMsgRef.key : null;
+    currentVoiceMsgKey = botMsgRef ? botMsgRef.key : null;
 
     const voiceUserRef = ref(db, `servers/${serverCode}/voice/${uid}`);
     if (typeof onDisconnect === "function") {
         onDisconnect(voiceUserRef).remove().catch(() => {});
         
-        if (msgKey) {
-            const msgRef = ref(db, `servers/${serverCode}/messages/${msgKey}`);
+        if (currentVoiceMsgKey) {
+            const msgRef = ref(db, `servers/${serverCode}/messages/${currentVoiceMsgKey}`);
             onDisconnect(msgRef).remove().catch(() => {});
         }
     }
@@ -2271,7 +2223,7 @@ async function joinVoiceChat(serverCode) {
         username: username,
         joinedAt: serverTimestamp(),
         isMuted: false,
-        msgKey: msgKey
+        msgKey: currentVoiceMsgKey
     });
 
     setupSpeakingIndicator(localAudioStream, uid);
@@ -2335,11 +2287,12 @@ async function leaveVoiceChat(serverCode, myUid) {
     }
 
     currentVoiceServer = null;
+    currentVoiceMsgKey = null;
     updateServerVoiceIcons();
 
     if (voiceContainerEl) voiceContainerEl.classList.add("hidden");
     if (currentServer) {
-        showChat();
+        switchView("chat");
     }
 }
 
@@ -2592,6 +2545,8 @@ function updateServerVoiceIcons() {
 
         if (code === currentVoiceServer) {
             hashEl.innerHTML = `<i class="fa-solid fa-volume-high"></i>`;
+        } else if (code === "system") {
+            hashEl.innerHTML = `<i class="fa-solid fa-gear"></i>`;
         } else {
             hashEl.textContent = "#";
         }
