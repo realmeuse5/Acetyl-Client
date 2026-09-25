@@ -9,6 +9,15 @@ import {
 
 // CONSTANTS
 const UPLOAD_URL = "https://acetyl-file-server.onrender.com/upload";
+const DEFAULT_SETTINGS = {
+  highContrast: false,
+  messageSound: true,
+  notifications: true,
+  unreadBadge: true,
+  startupServer: 'public',
+  startupSidebar: false,
+  cloudflareTurn: true
+};
 
 
 // GLOBALS
@@ -34,6 +43,7 @@ let signalUnsub = null;
 let isMuted = false;
 let currentVoiceMsgKey = null;
 let views;
+let appSettings = JSON.parse(localStorage.getItem('settings')) || { ...DEFAULT_SETTINGS };
 
 
 // UI ELEMENTS
@@ -137,7 +147,7 @@ window.onload = async () => {
     contextInviteBtnEl = document.getElementById("contextInvite");
     contextKickBtnEl = document.getElementById("contextKick");
     newMessage = new Audio('/client/Assets/newMessage.mp3')
-    await initAuthMode();
+    
     messageContextMenu = document.getElementById("messageContextMenu");
     msgContextGetUid = document.getElementById("msgContextGetUid");
     msgContextBan = document.getElementById("msgContextBan");
@@ -150,6 +160,10 @@ window.onload = async () => {
     voiceBackBtnEl = document.getElementById("voiceBackBtn");
     voiceMuteBtnEl = document.getElementById("voiceMuteBtn");
     systemContainerEl = document.getElementById("systemContainer")
+
+    await initAuthMode();
+    initSettingsUI();
+    applySettings();
 
     views = {
         chat: [chatContainerEl, messageBarEl],
@@ -188,6 +202,7 @@ async function finishAppLoad() {
 
     await loadSavedServers();
     await validateSavedServers();
+    initSettingsUI();
 
     attachUIListeners();
 
@@ -204,7 +219,20 @@ async function finishAppLoad() {
         switchView("guidelines");
     } else {
         const handledInvite = await handleInvite();
-        if (!handledInvite) switchServer("public");
+        if (!handledInvite) {
+            const targetServer = appSettings.startupServer || "public";
+            
+            const serverExists = targetServer === "public" || 
+                                targetServer === "announcements" || 
+                                targetServer === "system" || 
+                                myServers.some(s => s.code === targetServer);
+
+            if (serverExists) {
+                switchServer(targetServer);
+            } else {
+                switchServer("public"); 
+            }
+        }
         setupNotificationListener("public");
         checkAdminStatus();
     }
@@ -2604,6 +2632,108 @@ function updateSpeakingIndicators() {
 requestAnimationFrame(updateSpeakingIndicators);
 
 
+// SETTINGS
+function initSettingsUI() {
+    const checkboxMap = {
+        'setting-high-contrast': 'highContrast',
+        'setting-message-sound': 'messageSound',
+        'setting-notifications': 'notifications',
+        'setting-unread-badge': 'unreadBadge',
+        'setting-startup-sidebar': 'startupSidebar',
+        'setting-cloudflare-turn': 'cloudflareTurn'
+    };
+
+    Object.keys(checkboxMap).forEach(id => {
+        const el = document.getElementById(id);
+        const key = checkboxMap[id];
+
+        if (el) {
+        el.checked = appSettings[key];
+
+        el.addEventListener('change', (e) => {
+            appSettings[key] = e.target.checked;
+            localStorage.setItem('settings', JSON.stringify(appSettings));
+            applySettings(key);
+        });
+        }
+    });
+
+    populateStartupServerOptions();
+
+    const serverSelect = document.getElementById('setting-startup-server');
+    if (serverSelect) {
+        serverSelect.addEventListener('change', (e) => {
+        appSettings.startupServer = e.target.value;
+        localStorage.setItem('settings', JSON.stringify(appSettings));
+        });
+    }
+}
+
+function applySettings(changedKey = null) {
+    if (!changedKey || changedKey === 'highContrast') {
+        document.documentElement.classList.toggle('high-contrast', !!appSettings.highContrast);
+    }
+
+    if (!changedKey || changedKey === 'startupSidebar') {
+    const rightSidebar = document.getElementById('rightSidebar');
+        if (rightSidebar) {
+            if (appSettings.startupSidebar) {
+            rightSidebar.style.display = 'flex';
+            rightSidebar.classList.remove('hidden');
+            } else {
+            rightSidebar.style.display = 'none';
+            rightSidebar.classList.add('hidden');
+            }
+        }
+    }
+
+    if (changedKey === 'notifications' && appSettings.notifications) {
+        if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission();
+        }
+    }
+
+    if (!changedKey || changedKey === 'unreadBadge') {
+        if (!appSettings.unreadBadge) {
+            const badges = document.querySelectorAll('.unreadBadge');
+            badges.forEach(badge => badge.style.display = 'none');
+        }
+    }
+}
+
+function populateStartupServerOptions() {
+    const serverSelect = document.getElementById('setting-startup-server');
+    if (!serverSelect) return;
+
+    serverSelect.innerHTML = '';
+
+    const defaultServers = [
+        { code: 'public', name: '# Public' },
+        { code: 'announcements', name: '# Announcements' }
+    ];
+
+    defaultServers.forEach(server => {
+        const opt = document.createElement('option');
+        opt.value = server.code;
+        opt.textContent = server.name;
+        serverSelect.appendChild(opt);
+    });
+
+    if (Array.isArray(myServers)) {
+        myServers.forEach(server => {
+        if (!defaultServers.some(ds => ds.code === server.code)) {
+            const opt = document.createElement('option');
+            opt.value = server.code;
+            opt.textContent = "# " + server.name || server.code;
+            serverSelect.appendChild(opt);
+        }
+        });
+    }
+
+    serverSelect.value = appSettings.startupServer || 'public';
+}
+
+
 // UTILITY
 function isNearBottom() {
     const threshold = 200;
@@ -2622,14 +2752,14 @@ function maybeNotify(msg, serverId) {
 
     if (isTabActive() && serverId === currentServer) return;
 
-    if (newMessage) {
+    if (appSettings.messageSound && newMessage) {
         newMessage.currentTime = 0;
         newMessage.play().catch(err => {
-            console.warn("Autoplay blocked sound until first user interaction:", err);
+        console.warn("Autoplay blocked sound until first user interaction:", err);
         });
     }
 
-    if (!isTabActive() && Notification.permission === "granted") {
+    if (!isTabActive() && Notification.permission === "granted" && appSettings.notifications) {
         let serverName = serverId;
         if (serverId === "public") serverName = "public";
         else if (serverId === "announcements") serverName = "announcements";
@@ -2670,7 +2800,7 @@ function setupNotificationListener(serverId) {
             const row = document.querySelector(`.serverRow[data-server="${serverId}"]`);
             if (row) {
                 const badge = row.querySelector(".unreadBadge");
-                if (badge) {
+                if (badge && appSettings.unreadBadge) {
                     badge.textContent = unreadCounts[serverId];
                     badge.style.display = "inline-block";
                 }

@@ -4,12 +4,15 @@ html {
     margin: 0;
     padding: 0;
     overflow: hidden;
-    /*filter: contrast(200%)*/
 }
 
 body {
     margin: 0;
     padding: 0;
+}
+
+html.high-contrast {
+    filter: contrast(200%)
 }
 
 /* HEADER */
