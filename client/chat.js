@@ -1230,7 +1230,7 @@ async function switchServer(serverId) {
     const isOwner = data.createdBy === uid;
     const isReadOnly = !!data.readOnly;
 
-    if (isReadOnly) {
+    if (isReadOnly && !isOwner) {
         setInputDisabledState(true, `You do not have permission to message in #${serverName}`);
     } else if (isMuted && !isAdmin) {
         setInputDisabledState(true, "You do not have permission to message in Acetyl Client");
