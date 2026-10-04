@@ -40,10 +40,12 @@ let currentVoiceServer = null;
 let voiceUsersUnsub = null;
 let localAudioStream = null;
 let signalUnsub = null;
-let isMuted = false;
+let vcMuted = false;
 let currentVoiceMsgKey = null;
 let views;
 let appSettings = JSON.parse(localStorage.getItem('settings')) || { ...DEFAULT_SETTINGS };
+let isMuted = false;
+let muteUnsub = null;
 
 
 // UI ELEMENTS
@@ -79,6 +81,7 @@ let announcementsBtnEl;
 let contextMenuEl;
 let contextLeaveBtnEl
 let contextCopyCodeBtnEl;
+let contextReadOnlyBtnEl;
 let rightSidebarEl;
 let closeRightSidebarBtnEl;
 let contextServerMembersBtnEl;
@@ -100,6 +103,7 @@ let voiceContainerEl
 let voiceBackBtnEl
 let voiceMuteBtnEl
 let systemContainerEl;
+let msgContextMuteBtnEl;
 
 function writeOptions() { return { auth: { uid } }; }
 
@@ -160,6 +164,8 @@ window.onload = async () => {
     voiceBackBtnEl = document.getElementById("voiceBackBtn");
     voiceMuteBtnEl = document.getElementById("voiceMuteBtn");
     systemContainerEl = document.getElementById("systemContainer")
+    contextReadOnlyBtnEl = document.getElementById("contextReadOnly")
+    msgContextMuteBtnEl = document.getElementById("msgContextMute");
 
     await initAuthMode();
     initSettingsUI();
@@ -198,6 +204,7 @@ window.onload = async () => {
 };
 
 async function finishAppLoad() {
+    listenToMuteStatus();
     const newUser = await loadSavedUser(uid);
 
     await loadSavedServers();
@@ -368,16 +375,15 @@ function attachUIListeners() {
 
         switch (command.toLowerCase()) {
             case "/ban": {
-                const targetUsername = prompt("Enter username to ban:");
+                const targetUsername = prompt("Enter username to ban/unban:");
                 if (!targetUsername) return;
 
-                const durationHours = prompt("Ban duration (hours):");
-                if (!durationHours) return;
-
-                const reason = prompt("Reason for ban:");
-                if (!reason) return;
-
                 const usersSnap = await get(ref(db, "users"));
+                if (!usersSnap.exists()) {
+                    alert("No users found.");
+                    return;
+                }
+
                 const users = usersSnap.val();
                 let targetUid = null;
 
@@ -392,6 +398,27 @@ function attachUIListeners() {
                     alert("User not found.");
                     return;
                 }
+
+                if (targetUid === uid) {
+                    alert("You cannot ban yourself.");
+                    return;
+                }
+
+                const banSnap = await get(ref(db, `bans/${targetUid}`));
+                if (banSnap.exists()) {
+                    const confirmUnban = confirm(`User @${targetUsername} is currently banned. Do you want to unban them?`);
+                    if (!confirmUnban) return;
+
+                    await remove(ref(db, `bans/${targetUid}`));
+                    alert(`User @${targetUsername} has been unbanned.`);
+                    return;
+                }
+
+                const durationHours = prompt("Ban duration (hours):");
+                if (!durationHours) return;
+
+                const reason = prompt("Reason for ban:");
+                if (!reason) return;
 
                 const adminSnap = await get(ref(db, `admins/${targetUid}`));
                 if (adminSnap.exists()) {
@@ -437,8 +464,48 @@ function attachUIListeners() {
                 break;
             }
 
+            case "/mute": {
+                const targetUsername = prompt("Enter username to mute/unmute:");
+                if (!targetUsername) return;
+
+                const usersSnap = await get(ref(db, "users"));
+                if (!usersSnap.exists()) {
+                    alert("No users found.");
+                    return;
+                }
+
+                const users = usersSnap.val();
+                let targetUid = null;
+
+                for (const uidKey in users) {
+                    if (users[uidKey].username === targetUsername) {
+                        targetUid = uidKey;
+                        break;
+                    }
+                }
+
+                if (!targetUid) {
+                    alert("User not found.");
+                    return;
+                }
+
+                if (targetUid === uid) {
+                    alert("You cannot mute yourself.");
+                    return;
+                }
+
+                const adminSnap = await get(ref(db, `admins/${targetUid}`));
+                if (adminSnap.exists()) {
+                    alert("You cannot mute another admin.");
+                    return;
+                }
+
+                await toggleMuteUser(targetUid, targetUsername);
+                break;
+            }
+
             case "/cmds":
-                alert("Admin commands:\n/ban 🡒 ban a user\n/feedback 🡒 view feedback submitted by users\n/admins 🡒 view all admins\nMore coming soon, contact @𝙍乇𝘼𝙇𝙈𝙀𝙐𝙎𝙀 with ideas")
+                alert("Admin commands:\n/ban 🡒 ban a user\n/mute 🡒 mute a user\n/feedback 🡒 view feedback submitted by users\n/admins 🡒 view all admins\nMore coming soon, contact @𝙍乇𝘼𝙇𝙈𝙀𝙐𝙎𝙀 with ideas")
                 break;
             default:
                 alert("Invalid command.");
@@ -446,6 +513,11 @@ function attachUIListeners() {
     });
 
     messageInputEl.addEventListener("keydown", async (e) => {
+        if (!messageInputEl.hasAttribute("contenteditable") || messageInputEl.classList.contains("disabled")) {
+            e.preventDefault();
+            return;
+        }
+
         if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault(); 
 
@@ -676,6 +748,43 @@ function attachUIListeners() {
         });
     }
 
+    if (contextReadOnlyBtnEl) {
+        contextReadOnlyBtnEl.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            if (!contextMenuTargetServer) {
+                hideContextMenu();
+                return;
+            }
+
+            const serverCode = contextMenuTargetServer;
+            hideContextMenu();
+
+            try {
+                const serverRef = ref(db, `servers/${serverCode}`);
+                const snap = await get(serverRef);
+
+                if (!snap.exists()) return;
+
+                const serverData = snap.val();
+                if (serverData.createdBy !== uid) return;
+
+                const currentReadOnly = !!serverData.readOnly;
+                const newReadOnly = !currentReadOnly;
+
+                const promptMsg = newReadOnly
+                    ? "Are you sure you want to make this server read-only?"
+                    : "Are you sure you want to turn off read-only mode for this server?";
+
+                if (confirm(promptMsg)) {
+                    await set(ref(db, `servers/${serverCode}/readOnly`), newReadOnly, writeOptions());
+                    await sendBotMessage(serverCode, `🔒 Server Read-Only mode is now ${newReadOnly ? "ON" : "OFF"}. Only the owner can post messages.`);
+                }
+            } catch (err) {
+                console.error("Failed to toggle read-only mode:", err);
+            }
+        });
+    }
+
     msgContextGetUid.addEventListener("click", async (e) => {
         e.stopPropagation();
         if (!targetContextMenuMsg) {
@@ -697,29 +806,32 @@ function attachUIListeners() {
         }
 
         const { uid: targetUid, username: targetUsername } = targetContextMenuMsg;
+        hideContextMenu();
 
         if (targetUid === uid) {
             alert("You cannot ban yourself.");
-            hideContextMenu();
+            return;
+        }
+
+        const banSnap = await get(ref(db, `bans/${targetUid}`));
+        if (banSnap.exists()) {
+            const confirmUnban = confirm(`User @${targetUsername} is currently banned. Do you want to unban them?`);
+            if (!confirmUnban) return;
+
+            await remove(ref(db, `bans/${targetUid}`));
+            alert(`User @${targetUsername} has been unbanned.`);
             return;
         }
 
         const durationHours = prompt(`Ban duration (hours):`);
-        if (!durationHours) {
-            hideContextMenu();
-            return;
-        }
+        if (!durationHours) return;
 
         const reason = prompt(`Reason for ban:`);
-        if (!reason) {
-            hideContextMenu();
-            return;
-        }
+        if (!reason) return;
 
         const adminSnap = await get(ref(db, `admins/${targetUid}`));
         if (adminSnap.exists()) {
             alert("You cannot ban another admin.");
-            hideContextMenu();
             return;
         }
 
@@ -734,7 +846,6 @@ function attachUIListeners() {
         await sendBotMessage("public", `🫡 Farewell, @${targetUsername}. Your journey on Acetyl has come to an end (u got banned lol).`);
 
         alert(`User ${targetUsername} has been banned.`);
-        hideContextMenu();
     });
 
     msgContextDelete.addEventListener("click", async (e) => {
@@ -770,6 +881,32 @@ function attachUIListeners() {
         await toggleKickUser(currentServer, targetUid, targetUsername);
     });
 
+    if (msgContextMuteBtnEl) {
+        msgContextMuteBtnEl.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            if (!targetContextMenuMsg) {
+                hideContextMenu();
+                return;
+            }
+
+            const { uid: targetUid, username: targetUsername } = targetContextMenuMsg;
+            hideContextMenu();
+
+            if (targetUid === uid) {
+                alert("You cannot mute yourself.");
+                return;
+            }
+
+            const targetAdminSnap = await get(ref(db, `admins/${targetUid}`));
+            if (targetAdminSnap.exists()) {
+                alert("You cannot mute another admin.");
+                return;
+            }
+
+            await toggleMuteUser(targetUid, targetUsername);
+        });
+    }
+
     if (contextJoinVoiceBtnEl) {
         contextJoinVoiceBtnEl.addEventListener("click", (e) => {
             e.stopPropagation();
@@ -788,14 +925,14 @@ function attachUIListeners() {
         voiceMuteBtnEl.addEventListener("click", async () => {
             if (!localAudioStream) return;
 
-            isMuted = !isMuted;
+            vcMuted = !vcMuted;
 
             localAudioStream.getAudioTracks().forEach(track => {
-                track.enabled = !isMuted;
+                track.enabled = !vcMuted;
             });
 
             const iconEl = voiceMuteBtnEl.querySelector("i");
-            if (isMuted) {
+            if (vcMuted) {
                 iconEl.className = "fa-solid fa-microphone-slash";
                 voiceMuteBtnEl.classList.add("muted");
                 voiceMuteBtnEl.title = 'Unmute'
@@ -810,7 +947,7 @@ function attachUIListeners() {
                 await set(voiceUserRef, {
                     username: username || "Anonymous",
                     joinedAt: serverTimestamp(),
-                    isMuted: isMuted,
+                    vcMuted: vcMuted,
                     msgKey: currentVoiceMsgKey
                 });
             }
@@ -925,6 +1062,46 @@ async function checkBanStatus(userUid) {
 }
 
 
+// MUTE STATUS
+function listenToMuteStatus() {
+    if (muteUnsub) muteUnsub();
+
+    const myMuteRef = ref(db, `mutes/${uid}`);
+    muteUnsub = onValue(myMuteRef, (snap) => {
+        isMuted = snap.exists();
+
+        if (currentServer && currentServer !== "system") {
+            if (isMuted && !isAdmin) {
+                setInputDisabledState(true, "You do not have permission to message in Acetyl Client");
+            } else {
+                switchServer(currentServer);
+            }
+        }
+    });
+}
+
+async function toggleMuteUser(targetUid, targetUsername) {
+    const muteRef = ref(db, `mutes/${targetUid}`);
+    const muteSnap = await get(muteRef);
+
+    if (muteSnap.exists()) {
+        const confirmUnmute = confirm(`User @${targetUsername} is currently muted. Do you want to unmute them?`);
+        if (!confirmUnmute) return;
+
+        await remove(muteRef);
+        alert(`User @${targetUsername} has been unmuted.`);
+    } else {
+        await set(muteRef, {
+            username: targetUsername,
+            mutedBy: uid,
+            timestamp: Date.now()
+        });
+
+        alert(`User @${targetUsername} has been muted.`);
+    }
+}
+
+
 // KICKING USERS
 async function toggleKickUser(serverId, targetUid, targetUsername) {
     if (serverId === "public" || serverId === "announcements") {
@@ -1006,13 +1183,9 @@ async function switchServer(serverId) {
         currentServer = "announcements";
 
         if (isAdmin) {
-            messageInputEl.disabled = false;
-            messageInputEl.setAttribute("data-placeholder", "Post in #announcements");
-            fileInputEl.disabled = false;
+            setInputDisabledState(false, "Post in #Announcements");
         } else {
-            messageInputEl.disabled = true;
-            messageInputEl.setAttribute("data-placeholder", "You do not have permission to post in #announcements");
-            fileInputEl.disabled = true;
+            setInputDisabledState(true, "You do not have permission to post in #Announcements");
         }
 
         if (unsubscribe) unsubscribe();
@@ -1054,7 +1227,17 @@ async function switchServer(serverId) {
     const data = serverSnap.val();
     const serverName = data.name || serverId;
 
-    updatePlaceholder(serverName);
+    const isOwner = data.createdBy === uid;
+    const isReadOnly = !!data.readOnly;
+
+    if (isMuted && !isAdmin) {
+    setInputDisabledState(true, "You do not have permission to message in Acetyl Client");
+    } else if (isReadOnly && !isOwner && !isAdmin) {
+        setInputDisabledState(true, `You do not have permission to post in #${serverName}`);
+    } else {
+        setInputDisabledState(false, `Message #${serverName}`);
+    }
+    
     currentServer = serverId;
 
     if (serverId !== "public" && serverId !== "announcements") {
@@ -1547,6 +1730,8 @@ async function sendMessage() {
     const file = attachedFile;
 
     if (!noAuthMode && !uid) return;
+
+    if (isMuted && !isAdmin) return;
 
     const dm = parseDM(text);
 
@@ -2250,7 +2435,7 @@ async function joinVoiceChat(serverCode) {
     await set(voiceUserRef, {
         username: username,
         joinedAt: serverTimestamp(),
-        isMuted: false,
+        vcMuted: false,
         msgKey: currentVoiceMsgKey
     });
 
@@ -2817,7 +3002,7 @@ function setupNotificationListener(serverId) {
     }, { onlyOnce: true });
 }
 
-function showServerContextMenu(e, serverCode) {
+async function showServerContextMenu(e, serverCode) {
     e.preventDefault(); 
     e.stopPropagation();
 
@@ -2825,13 +3010,53 @@ function showServerContextMenu(e, serverCode) {
 
     contextMenuTargetServer = serverCode;
     updateKickButton(serverCode);
-    contextMenuEl.classList.remove("hidden");
 
     const isSystem = serverCode === "system";
     if (contextServerMembersBtnEl) contextServerMembersBtnEl.style.display = isSystem ? "none" : "block";
     if (contextInviteBtnEl) contextInviteBtnEl.style.display = isSystem ? "none" : "block";
     if (contextKickBtnEl) contextKickBtnEl.style.display = isSystem ? "none" : "block";
-    if (contextJoinVoiceBtnEl) contextJoinVoiceBtnEl.style.display = isSystem ? "none" : "block";
+    if (contextReadOnlyBtnEl) {
+        if (isSystem) {
+            contextReadOnlyBtnEl.style.display = "none";
+        } else {
+            try {
+                const serverSnap = await get(ref(db, `servers/${serverCode}`));
+                const serverData = serverSnap.exists() ? serverSnap.val() : null;
+                
+                if (serverData && serverData.createdBy === uid) {
+                    contextReadOnlyBtnEl.style.display = "block";
+                    const isReadOnly = !!serverData.readOnly;
+                    contextReadOnlyBtnEl.textContent = `Read-Only Mode: ${isReadOnly ? "On" : "Off"}`;
+                } else {
+                    contextReadOnlyBtnEl.style.display = "none";
+                }
+            } catch (err) {
+                contextReadOnlyBtnEl.style.display = "none";
+            }
+        }
+    }
+
+    if (contextJoinVoiceBtnEl) {
+        contextJoinVoiceBtnEl.style.display = isSystem ? "none" : "block";
+
+        if (!isSystem) {
+            let voiceCount = 0;
+            try {
+                const voiceSnapshot = await get(ref(db, `servers/${serverCode}/voice`));
+                if (voiceSnapshot.exists()) {
+                    voiceCount = Object.keys(voiceSnapshot.val()).length;
+                }
+            } catch (err) {
+                console.error("Error fetching voice user count:", err);
+            }
+
+            contextJoinVoiceBtnEl.textContent = voiceCount > 0 
+                ? `Join Voice Chat (${voiceCount})` 
+                : "Join Voice Chat";
+        }
+    }
+
+    contextMenuEl.classList.remove("hidden");
 
     const menuHeight = contextMenuEl.offsetHeight;
     const menuWidth = contextMenuEl.offsetWidth;
@@ -2896,6 +3121,26 @@ async function showMessageContextMenu(e, msg) {
         }
     }
 
+    if (msgContextMuteBtnEl) {
+        if (isAdmin && msg.uid !== uid) {
+            try {
+                const adminSnap = await get(ref(db, `admins/${msg.uid}`));
+                if (!adminSnap.exists()) {
+                    const muteSnap = await get(ref(db, `mutes/${msg.uid}`));
+                    msgContextMuteBtnEl.textContent = muteSnap.exists() ? "Unmute User" : "Mute User";
+                    msgContextMuteBtnEl.classList.remove("disabled");
+                    msgContextMuteBtnEl.style.display = "block";
+                } else {
+                    msgContextMuteBtnEl.style.display = "none";
+                }
+            } catch (err) {
+                msgContextMuteBtnEl.style.display = "none";
+            }
+        } else {
+            msgContextMuteBtnEl.style.display = "none";
+        }
+    }
+
     if (contextMenuEl) contextMenuEl.classList.add("hidden");
 
     messageContextMenu.classList.remove("hidden");
@@ -2957,5 +3202,26 @@ async function handleInvite() {
         return true;
     } catch (err) {
         return false;
+    }
+}
+
+function setInputDisabledState(isDisabled, placeholderText) {
+    if (!messageInputEl) return;
+
+    if (isDisabled) {
+        messageInputEl.removeAttribute("contenteditable");
+        messageInputEl.classList.add("disabled");
+        messageInputEl.setAttribute("data-placeholder", placeholderText);
+        messageInputEl.textContent = "";
+
+        if (fileInputEl) fileInputEl.disabled = true;
+        if (typeof attachBtnEl !== "undefined" && attachBtnEl) attachBtnEl.disabled = true;
+    } else {
+        messageInputEl.setAttribute("contenteditable", "plaintext-only");
+        messageInputEl.classList.remove("disabled");
+        messageInputEl.setAttribute("data-placeholder", placeholderText);
+
+        if (fileInputEl) fileInputEl.disabled = false;
+        if (typeof attachBtnEl !== "undefined" && attachBtnEl) attachBtnEl.disabled = false;
     }
 }
