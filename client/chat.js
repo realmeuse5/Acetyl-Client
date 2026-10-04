@@ -1230,10 +1230,10 @@ async function switchServer(serverId) {
     const isOwner = data.createdBy === uid;
     const isReadOnly = !!data.readOnly;
 
-    if (isMuted && !isAdmin) {
-    setInputDisabledState(true, "You do not have permission to message in Acetyl Client");
-    } else if (isReadOnly && !isOwner && !isAdmin) {
-        setInputDisabledState(true, `You do not have permission to post in #${serverName}`);
+    if (isReadOnly) {
+        setInputDisabledState(true, `You do not have permission to message in #${serverName}`);
+    } else if (isMuted && !isAdmin) {
+        setInputDisabledState(true, "You do not have permission to message in Acetyl Client");
     } else {
         setInputDisabledState(false, `Message #${serverName}`);
     }
@@ -1883,6 +1883,13 @@ async function postAnnouncement() {
 async function sendBotMessage(serverId, text, action = null) {
     if (!serverId) return null;
     try {
+        const serverRef = ref(db, `servers/${serverId}`);
+        const serverSnap = await get(serverRef);
+
+        if (serverSnap.exists() && serverSnap.val().readOnly) {
+            return null;
+        }
+
         const messagesRef = ref(db, `servers/${serverId}/messages`);
         const newMsgRef = push(messagesRef);
 
