@@ -2,6 +2,14 @@
     padding: 20px 40px;
     line-height: 0.7;
     border-bottom: #29292d 1px solid;
+    display: flex;
+    justify-content: space-between;
+}
+
+#section-1 img {
+    max-width: 300px;        
+    height: auto;
+    object-fit: contain;
 }
 
 #section-1 h2 {

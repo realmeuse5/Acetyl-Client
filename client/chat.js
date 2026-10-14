@@ -2342,7 +2342,7 @@ let globalAudioCtx = null;
 async function getRtcConfig() {
     try {
         const response = await fetch(
-            "https://acetyl-turn.mbhongale0.workers.dev",
+            "https://acetyl-turn.realmeuse.workers.dev",
             {
                 method: "GET",
                 cache: "no-store"
