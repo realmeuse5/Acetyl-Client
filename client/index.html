@@ -29,12 +29,7 @@
         <ul>
             <li id="contextInvite">Invite</li>
             <li id="contextKick">Kick</li>
-            <li id="contextCopyCode">Server Code</li>
-            <li id="contextServerMembers">Server Members</li>
-            <li id="contextReadOnly">Read-Only Mode: Off</li>
-            <li id="contextJoinVoice">Join Voice Chat</li>
             <li id="contextLeaveServer" class="danger">Leave Server</li>
-            
         </ul>
     </div>
 
@@ -48,17 +43,39 @@
         </ul>
     </div>
 
+    <div id="loadingScreen">
+        <img src="/client/Assets/favicon.svg">
+        <p>Loading Acetyl Client...</p>
+    </div>
+
     <div id="webContainer">
         <div id="sidebar">
             <div id="userSidebar">
-                <span id="username" title="Change username"></span>
+                <img id="profilePicture" src="/client/Assets/pfp.png">
+                <div id="userSidebarText">
+                    <span id="username" title="Change username"></span>
+                    <a id="logOut">Log out</a>
+                </div>
             </div>
             <button id="adminBtn"><i class="fa-solid fa-circle-check"></i>&nbsp;&nbsp;Admin</button>
-            <button id="publicServerBtn" class="tabBtn"><span>#</span>&nbsp;&nbsp;Public</button>
-            <button id="announcementsBtn" class="tabBtn"><span>#</span>&nbsp;&nbsp;Announcements</button>
-            <button id="guidelinesBtn" class="tabBtn"><span>#</span>&nbsp;&nbsp;Guidelines</button>
-            <button id="createServerBtn" class="actionButton"><i class="fa-sharp fa-solid fa-plus" style="margin-right: 20px"></i>Create Server</button>
-            <button id="joinServerBtn" class="actionButton"><i class="fa-solid fa-arrow-right-to-bracket" style="margin-right: 20px"></i>Join Server</button>
+            <button id="publicServerBtn" class="tabBtn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="channel-glyph"><path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18"></path></svg>
+                &nbsp;&nbsp;Public
+            </button>
+
+            <button id="announcementsBtn" class="tabBtn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="channel-glyph"><path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18"></path></svg>
+                &nbsp;&nbsp;Announcements
+            </button>
+
+            <button id="guidelinesBtn" class="tabBtn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="channel-glyph"><path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18"></path></svg>
+                &nbsp;&nbsp;Guidelines
+            </button>
+            <div id="actionButtons">
+                <button id="createServerBtn" class="actionButton"><i class="fa-sharp fa-solid fa-plus" style="margin-right: 20px"></i>Create Server</button>
+                <button id="joinServerBtn" class="actionButton"><i class="fa-solid fa-arrow-right-to-bracket" style="margin-right: 20px"></i>Join Server</button>
+            </div>
             <p id="serverListTitle">Server List</p>
             <p id="noServersMsg">You have not joined any servers</p>
             <div id="serverList"></div>
@@ -66,6 +83,24 @@
 
         <div id="main">
             <div id="chatContainer" class="app-view">
+                <div id="chatHeader">
+                    <div id="chatHeaderTitle">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="channel-glyph"><path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18"></path></svg>
+                        <span id="chatHeaderName">Public</span>
+                    </div>
+                    <div id="chatHeaderActions">
+                        <button id="headerReadOnly">
+                            Read-Only Mode: Off
+                        </button>
+                        <button id="headerVoicechatBtn">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="channel-glyph voice-glyph"><path d="M11 5 6 9H2v6h4l5 4V5z"></path><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path></svg>
+                            Join VC
+                        </button>
+                        <button id="headerMembersBtn">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                        </button>
+                    </div>
+                </div>
                 <div id="messages"></div>
             </div>
 
@@ -89,15 +124,14 @@
                     <p>Acetyl Client is meant to be a fun, energetic, and welcoming chat app for everyone. Whether you’re here to chat with friends, join new communities, or explore what this platform can do, these guidelines help keep things safe, respectful, and enjoyable. Think of this page as both a quick beginners guide and an agreement on how we treat each other.</p>
                     <h2>Getting Started</h2>
                     <p>You can join the Public server instantly, or enter a server code to join private spaces with friends or groups. Creating your own server is easy too — just pick a name and share the code with whoever you want to invite.</p>
-                    <p>Messages support normal text, special characters, emojis, files, and anything else you can think of. Feel free to express yourself and bring some personality into the chat. Just keep it readable and avoid flooding the conversation (aka spamming). If you want to send a direct message to someone, you can do so by including <code>@username,</code> at the start of the message. Note that there must be a comma after the username.</p>
-                    <p>If something isn’t working, you have ideas, or you want to request a feature, check out our <a href="/support/" target="_blank">Support Page</a>, use the <a href="#" id="feedbackFormLink">feedback form</a>, or reach out directly at <a href="mailto:support@acetyl.cc">support@acetyl.cc</a>. Whether you have bug reports, suggestions, or general questions, we're here to help!</p>
+                    <p>Messages support normal text, special characters, emojis, files, and anything else you can think of. Feel free to express yourself and bring some personality into the chat. Just keep it readable and avoid flooding the conversation (aka spamming). If you want to send a direct message to someone, you can do so by including <code>@username,</code> at the start of the message.</p>
                     <h2>The Actual Guidelines</h2>
-                    <p>Be respectful. Treat everyone like a real person. No harassment, hate speech, or anything like that.</p>
+                    <p>Be respectful. Treat everyone like a real person. No harassment, hate speech, or NSFW.</p>
                     <p>Keep things clean and safe. No illegal content, harmful links, malware, or anything that could put others at risk.</p>
                     <p>Have fun, but don’t disrupt. You are welcome to express yourself, but spamming is not allowed. It’s annoying and disruptive for everyone. Use common sense. If you’re unsure whether something is okay, it’s probably better not to send it.</p>
                     <h2>Safety & Moderation</h2>
                     <p>Admins help keep the platform safe and enjoyable. They can step in when needed, remove harmful content, and issue bans. If you’re banned, run into a user issue, or need help with your account, you can reach out via our <a href="/support/" target="_blank">Support Page</a> or email <a href="mailto:support@acetyl.cc">support@acetyl.cc</a> to appeal or get support.</p>
-                    <p>If you run into a problem — whether it’s a bug, a user issue, or something that feels off — you can always use the feedback form to report it. It’s the best way to get help, request fixes, or suggest improvements.</p>
+                    <p>If you run into a problem — whether it’s a bug, a user issue, or something that feels off — you can visit <a href="/support">acetyl.cc/support</a> and contact us by using one of the options.</p>
                     <p>Acetyl isn’t intended for use on school‑managed networks or devices. Many schools block chat apps, so please respect your institution’s rules.</p>
                     <h2>Legal, Privacy & Licensing</h2>
                     <p>&copy; 2026 Acetyl. All rights reserved.</p>
@@ -106,75 +140,29 @@
                         <a href="/privacy/" target="_blank">Privacy Policy</a> | 
                         <a href="/terms/" target="_blank">Terms of Service</a> | 
                         <a href="/support/" target="_blank">Support Page</a> | 
-                        <a href="#" id="feedbackFormLink2">Feedback Form</a> | 
                         <a href="mailto:support@acetyl.cc">support@acetyl.cc</a>
                     </p>
                     <p>Acetyl Client source code is available under the <a href="https://github.com/realmeuse5/Acetyl-Client/blob/main/LICENSE.md" target="_blank" rel="noopener">PolyForm Noncommercial 1.0.0 License</a>. You can view, audit, and contribute to the repository on <a href="https://github.com/realmeuse5/Acetyl-Client" target="_blank" rel="noopener">GitHub</a>.</p>
                     <p><em>Note: This license permits noncommercial use, studying the codebase, and self-hosting personal instances, but strictly prohibits commercial use or selling. For full details on trademarks, proprietary media assets, and usage rules, review our complete <a href="/legal/" target="_blank">Legal Notice</a>.</em></p>
                 </div>
-
-                <div id="feedbackForm" class="hidden app-view">
-                    <h1>Submit Feedback</h1>
-                    <p>
-                        Found a bug, have an idea, or need help? Let us know.
-                        Your feedback helps us improve Acetyl.
-                    </p>
-
-                    <div class="feedbackFields">
-
-                        <div class="feedbackField">
-                            <label for="feedbackCategory">What is this about?</label>
-                            <select id="feedbackCategory" name="feedbackCategory" required>
-                                <option value="Bug Report">Bug Report</option>
-                                <option value="Feature Request">Feature Request</option>
-                                <option value="Report a User">Report a User</option>
-                                <option value="Report a Server">Report a Server</option>
-                                <option value="Ban Appeal">Ban Appeal</option>
-                                <option value="General Feedback">General Feedback</option>
-                                <option value="Other">Other</option>
-                            </select>
-                        </div>
-
-                        <div class="feedbackField">
-                            <div class="labelRow">
-                                <label for="feedbackMessage">Details</label>
-                                <span id="feedbackCharCount">0 / 2000</span>
-                            </div>
-
-                            <textarea
-                                id="feedbackMessage"
-                                name="feedbackMessage"
-                                maxlength="2000"
-                                placeholder="Tell us what happened, what you'd like to see changed, or anything else we should know..."
-                            ></textarea>
-                        </div>
-
-                    </div>
-
-                    <div class="feedbackSubmit">
-                        <span>Thanks for helping improve Acetyl</span>
-                        <button id="submitFeedbackBtn" type="button">
-                            Submit Feedback
-                            <span class="submitArrow">▶</span>
-                        </button>
-                    </div>
-                    
-                </div>
-                <div id="feedbackViewer" class="hidden app-view"></div>
             </div>
 
             <div id="voice-container" class="hidden app-view">
-                <div id="voiceHeader">
-                    <button id="voiceBackBtn">◀ Leave Voice Chat</button>
-                    <button id="voiceMuteBtn" title="Mute"><i class="fa-solid fa-microphone"></i></button>
+                <div id="chatHeader">
+                    <div id="chatHeaderTitle">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="channel-glyph voice-glyph"><path d="M11 5 6 9H2v6h4l5 4V5z"></path><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path></svg>
+                        <span id="voiceHeaderName">Voice Server</span>
+                    </div>
+                    <div id="chatHeaderActions">
+                        <button id="voiceBackBtn">◀&ensp;Leave Voice Chat</button>
+                        <button id="voiceMuteBtn" title="Mute"><i class="fa-solid fa-microphone"></i></button>
+                    </div>
                 </div>
 
                 <div class="voice-grid"></div>
             </div>
 
             <div id="systemContainer" class="hidden app-view">
-                <h1>System Settings</h1>
-
                 <label class="setting-item">
                     <span>High Contrast Mode</span>
                     <input type="checkbox" id="setting-high-contrast">
@@ -191,6 +179,10 @@
                     <span>Unread Messages</span>
                     <input type="checkbox" id="setting-unread-badge">
                 </label>
+                <label class="setting-item">
+                    <span>Enable Profile Pictures</span>
+                    <input type="checkbox" id="setting-pfp">
+                </label>
                 <hr>
                 <div class="setting-item">
                 <span>Default Startup Server</span>
@@ -202,21 +194,13 @@
                     <span>Right Sidebar on Startup</span>
                     <input type="checkbox" id="setting-startup-sidebar">
                 </label>
-                <hr>
-                <label class="setting-item">
-                    <span>Use Cloudflare TURN Server for VC</span>
-                    <input type="checkbox" id="setting-cloudflare-turn">
-                </label>
-                <div class="setting-item">
-                    <span>Account Recovery</span>
-                </div>
             </div>
         </div>
 
         <div id="rightSidebar">
             <button id="closeRightSidebar">Close ▶</button>
             <div class="sidebar-section">
-                <h4 class="section-title">Active Users</h4>
+                <h4 class="section-title">Online</h4>
                 <ul id="activeMembersList" class="member-list"></ul>
             </div>
 

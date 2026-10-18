@@ -3,6 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <title>404</title>
+
+    <script>
+    (function() {
+        const path = window.location.pathname;
+        if (path.startsWith('/invite/')) {
+            const parts = path.split('/');
+            const inviteCode = parts[2];
+            if (inviteCode) {
+                window.location.replace('/client/?invite=' + encodeURIComponent(inviteCode));
+            }
+        }
+    })();
+</script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cal+Sans&family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&display=swap" rel="stylesheet">
@@ -55,8 +68,8 @@
 
     <div id="content">
         <h1>404</h1>
-        <h2>Whoops. You've reached the void.</h2>
-        <p>It looks like the page you were trying to reach vanished into thin air, was moved, or was just a figment of your imagination all along. Either way, standing here in the dark won't help much.</p>
+        <h2>You've reached the void.</h2>
+        <p>It looks like the page you were trying to reach was deleted, moved, or never existed at all. Either way, standing here in the dark won't help much.</p>
     </div>
 
     <div id="footer"></div>

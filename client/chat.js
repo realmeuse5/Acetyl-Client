@@ -8,16 +8,19 @@ import {
 
 
 // CONSTANTS
-const UPLOAD_URL = "https://acetyl-file-server.onrender.com/upload";
+const UPLOAD_URL = "https://acetyl-files.realmeuse.workers.dev/upload";
+const HASH_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="channel-glyph"><path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18"></path></svg>`;
+const VOICE_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="channel-glyph voice-glyph"><path d="M11 5 6 9H2v6h4l5 4V5z"></path><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path></svg>`;
 const DEFAULT_SETTINGS = {
   highContrast: false,
   messageSound: true,
   notifications: true,
   unreadBadge: true,
+  showPfp: true,
   startupServer: 'public',
   startupSidebar: false,
-  cloudflareTurn: true
 };
+const userCache = {};
 
 
 // GLOBALS
@@ -46,6 +49,7 @@ let views;
 let appSettings = JSON.parse(localStorage.getItem('settings')) || { ...DEFAULT_SETTINGS };
 let isMuted = false;
 let muteUnsub = null;
+let lastUploadTimestamp = 0;
 
 
 // UI ELEMENTS
@@ -69,22 +73,11 @@ let chatContainerEl;
 let guidelinesContainerEl;
 let messageBarEl
 let guidelinesEl;
-let feedbackFormEl;
-let feedbackViewerEl;
-let feedbackFormLinkEl;
-let feedbackFormLink2El;
-let feedbackCategoryEl;
-let feedbackMessageEl;
-let feedbackCharCountEl;
-let submitFeedbackBtnEl;
 let announcementsBtnEl;
 let contextMenuEl;
 let contextLeaveBtnEl
-let contextCopyCodeBtnEl;
-let contextReadOnlyBtnEl;
 let rightSidebarEl;
 let closeRightSidebarBtnEl;
-let contextServerMembersBtnEl;
 let activeMembersListEl;
 let allMembersListEl;
 let allMembersHeaderEl;
@@ -98,12 +91,18 @@ let msgContextDelete;
 let msgContextKick;
 let kickedMembersHeaderEl
 let kickedMembersListEl
-let contextJoinVoiceBtnEl
 let voiceContainerEl
 let voiceBackBtnEl
 let voiceMuteBtnEl
 let systemContainerEl;
 let msgContextMuteBtnEl;
+let loadingScreenEl;
+let headerReadOnlyBtnEl;
+let headerVoicechatBtnEl;
+let headerMembersBtnEl;
+let chatHeaderNameEl;
+let profilePicEl;
+let voiceHeaderNameEl;
 
 function writeOptions() { return { auth: { uid } }; }
 
@@ -129,22 +128,12 @@ window.onload = async () => {
     chatContainerEl = document.getElementById("chatContainer");
     guidelinesContainerEl = document.getElementById("guidelinesContainer");
     guidelinesEl = document.getElementById("guidelines");
-    feedbackFormEl = document.getElementById("feedbackForm");
-    feedbackViewerEl = document.getElementById("feedbackViewer");
-    feedbackFormLinkEl = document.getElementById("feedbackFormLink");
-    feedbackFormLink2El = document.getElementById("feedbackFormLink2");
     messageBarEl = document.getElementById("messageBar");
-    feedbackCategoryEl = document.getElementById("feedbackCategory");
-    feedbackMessageEl = document.getElementById("feedbackMessage");
-    feedbackCharCountEl = document.getElementById("feedbackCharCount");
-    submitFeedbackBtnEl = document.getElementById("submitFeedbackBtn");
     announcementsBtnEl = document.getElementById("announcementsBtn");
     contextMenuEl = document.getElementById("serverContextMenu");
     contextLeaveBtnEl = document.getElementById("contextLeaveServer");
-    contextCopyCodeBtnEl = document.getElementById("contextCopyCode");
     rightSidebarEl = document.getElementById("rightSidebar");
     closeRightSidebarBtnEl = document.getElementById("closeRightSidebar");
-    contextServerMembersBtnEl = document.getElementById("contextServerMembers");
     activeMembersListEl = document.getElementById("activeMembersList");
     allMembersListEl = document.getElementById("allMembersList");
     allMembersHeaderEl = document.getElementById("allMembersHeader");
@@ -159,13 +148,18 @@ window.onload = async () => {
     msgContextKick = document.getElementById("msgContextKick");
     kickedMembersHeaderEl = document.getElementById("kickedMembersHeader");
     kickedMembersListEl = document.getElementById("kickedMembersList");
-    contextJoinVoiceBtnEl = document.getElementById("contextJoinVoice")
     voiceContainerEl = document.getElementById("voice-container")
     voiceBackBtnEl = document.getElementById("voiceBackBtn");
     voiceMuteBtnEl = document.getElementById("voiceMuteBtn");
     systemContainerEl = document.getElementById("systemContainer")
-    contextReadOnlyBtnEl = document.getElementById("contextReadOnly")
     msgContextMuteBtnEl = document.getElementById("msgContextMute");
+    loadingScreenEl = document.getElementById("loadingScreen");
+    headerReadOnlyBtnEl = document.getElementById("headerReadOnly");
+    headerVoicechatBtnEl = document.getElementById("headerVoicechatBtn");
+    headerMembersBtnEl = document.getElementById("headerMembersBtn");
+    chatHeaderNameEl = document.getElementById("chatHeaderName");
+    profilePicEl = document.getElementById("profilePicture")
+    voiceHeaderNameEl = document.getElementById("voiceHeaderName")
 
     await initAuthMode();
     initSettingsUI();
@@ -174,8 +168,6 @@ window.onload = async () => {
     views = {
         chat: [chatContainerEl, messageBarEl],
         guidelines: [guidelinesContainerEl, guidelinesEl],
-        feedbackForm: [guidelinesContainerEl, feedbackFormEl],
-        feedbackViewer: [guidelinesContainerEl, feedbackViewerEl],
         voice: [voiceContainerEl],
         system: [systemContainerEl]
     };
@@ -218,12 +210,13 @@ async function finishAppLoad() {
         alert(
             "Welcome! Since this is your first time using Acetyl Client, " +
             "please take a moment to read the Community Guidelines. " +
-            "After that, you can head to the Public server and start chatting. " +
-            "Note: Acetyl is designed for personal and community use. Some schools restrict chat apps, so please follow your school’s technology policies."
+            "After that, you can head to the Public server and start chatting. "
         );
         await set(ref(db, `users/${uid}/username`), username, writeOptions());
         localStorage.setItem("username", username);
         switchView("guidelines");
+
+        loadingScreenEl.classList.add("fade-out");
     } else {
         const handledInvite = await handleInvite();
         if (!handledInvite) {
@@ -242,6 +235,17 @@ async function finishAppLoad() {
         }
         setupNotificationListener("public");
         checkAdminStatus();
+
+        loadingScreenEl.classList.add("fade-out");
+    }
+
+    if (appSettings.startupSidebar && currentServer !== "announcements" && currentServer !== "system") {
+        rightSidebarEl.style.display = 'flex';
+        if (headerMembersBtnEl) headerMembersBtnEl.classList.add("active");
+        setupActiveUserListener(currentServer);
+        loadAllMembers(currentServer);
+    } else {
+        rightSidebarEl.style.display = 'none';
     }
 
     if (Notification.permission !== "granted") Notification.requestPermission();
@@ -254,6 +258,12 @@ async function finishAppLoad() {
 
 // LOAD USER + SERVERS
 async function loadSavedUser(currentUid) {
+    const pfpSnap = await get(ref(db, `users/${currentUid}/pfpUrl`));
+
+    if (pfpSnap.exists() && profilePicEl) {
+        profilePicEl.src = pfpSnap.val();
+    }
+
     const savedName = localStorage.getItem("username");
 
     if (savedName) {
@@ -440,11 +450,6 @@ function attachUIListeners() {
                 break;
             }
 
-            case "/feedback": 
-                switchView("feedbackViewer");
-                loadFeedback();
-                break;
-
             case "/admins": {
                 const adminsSnap = await get(ref(db, "admins"));
                 if (!adminsSnap.exists()) {
@@ -505,7 +510,7 @@ function attachUIListeners() {
             }
 
             case "/cmds":
-                alert("Admin commands:\n/ban 🡒 ban a user\n/mute 🡒 mute a user\n/feedback 🡒 view feedback submitted by users\n/admins 🡒 view all admins\nMore coming soon, contact @𝙍乇𝘼𝙇𝙈𝙀𝙐𝙎𝙀 with ideas")
+                alert("Admin commands:\n/ban 🡒 ban a user\n/mute 🡒 mute a user\n/admins 🡒 view all admins\nMore coming soon, contact @𝙍乇𝘼𝙇𝙈𝙀𝙐𝙎𝙀 with ideas")
                 break;
             default:
                 alert("Invalid command.");
@@ -610,22 +615,6 @@ function attachUIListeners() {
         switchView("guidelines");
     });
 
-    feedbackFormLinkEl.addEventListener("click", (e) => {
-        e.preventDefault();
-        switchView("feedbackForm");
-    });
-
-    feedbackFormLink2El.addEventListener("click", (e) => {
-        e.preventDefault();
-        switchView("feedbackForm");
-    });
-
-    feedbackMessageEl.addEventListener("input", () => {
-        feedbackCharCountEl.textContent = `${feedbackMessageEl.value.length} / 2000`;
-    });
-
-    submitFeedbackBtnEl.addEventListener("click", submitFeedback);
-
     document.addEventListener("click", hideContextMenu);
     document.addEventListener("scroll", hideContextMenu, true);
 
@@ -639,54 +628,26 @@ function attachUIListeners() {
         });
     }
 
-    if (contextCopyCodeBtnEl) {
-        contextCopyCodeBtnEl.addEventListener("click", async (e) => {
-            e.stopPropagation();
-
-            if (contextMenuTargetServer) {
-                const codeToCopy = contextMenuTargetServer;
-
-                try {
-                    if (navigator.clipboard && navigator.clipboard.writeText) {
-                        await navigator.clipboard.writeText(codeToCopy);
-                    } else {
-                        const textarea = document.createElement("textarea");
-                        textarea.value = codeToCopy;
-                        document.body.appendChild(textarea);
-                        textarea.select();
-                        document.execCommand("copy");
-                        document.body.removeChild(textarea);
-                    }
-                } catch (err) {
-                    console.error("Failed to copy code: ", err);
-                }
+    if (headerMembersBtnEl) {
+        headerMembersBtnEl.addEventListener("click", () => {
+            if (!rightSidebarEl) return;
+            const isHidden = getComputedStyle(rightSidebarEl).display === "none";
+            if (isHidden) {
+                rightSidebarEl.style.display = "flex";
+                headerMembersBtnEl.classList.add("active");
+                setupActiveUserListener(currentServer);
+                loadAllMembers(currentServer);
+            } else {
+                rightSidebarEl.style.display = "none";
+                headerMembersBtnEl.classList.remove("active");
             }
-
-            hideContextMenu(); 
-        });
-    }
-
-    if (contextServerMembersBtnEl) {
-        contextServerMembersBtnEl.addEventListener('click', () => {
-            if (contextMenuTargetServer) {
-                if (rightSidebarEl) {
-                    rightSidebarEl.style.display = 'flex';
-                }
-
-                if (currentServer !== contextMenuTargetServer) {
-                    switchServer(contextMenuTargetServer);
-                } else {
-                    setupActiveUserListener(contextMenuTargetServer);
-                    loadAllMembers(contextMenuTargetServer);
-                }
-            }
-            hideContextMenu();
         });
     }
 
     if (closeRightSidebarBtnEl) {
         closeRightSidebarBtnEl.addEventListener('click', () => {
             rightSidebarEl.style.display = 'none';
+            if (headerMembersBtnEl) headerMembersBtnEl.classList.remove("active");
         });
     }
 
@@ -694,8 +655,8 @@ function attachUIListeners() {
         contextInviteBtnEl.addEventListener("click", (e) => {
             e.stopPropagation();
             if (contextMenuTargetServer) {
-                const inviteUrl = `${window.location.origin}/client/#${contextMenuTargetServer}`;
-                alert(`Invite link:\n${inviteUrl}`);
+                const inviteUrl = `${window.location.origin}/invite/${contextMenuTargetServer}`;
+                alert(`Server Code: ${contextMenuTargetServer}\n\nOr use this invite link:\n${inviteUrl}`);
             }
             hideContextMenu();
         });
@@ -748,39 +709,28 @@ function attachUIListeners() {
         });
     }
 
-    if (contextReadOnlyBtnEl) {
-        contextReadOnlyBtnEl.addEventListener("click", async (e) => {
-            e.stopPropagation();
-            if (!contextMenuTargetServer) {
-                hideContextMenu();
-                return;
-            }
-
-            const serverCode = contextMenuTargetServer;
-            hideContextMenu();
-
+    if (headerReadOnlyBtnEl) {
+        headerReadOnlyBtnEl.addEventListener("click", async () => {
+            if (!currentServer || currentServer === "public" || currentServer === "announcements") return;
             try {
-                const serverRef = ref(db, `servers/${serverCode}`);
+                const serverRef = ref(db, `servers/${currentServer}`);
                 const snap = await get(serverRef);
-
                 if (!snap.exists()) return;
 
                 const serverData = snap.val();
                 if (serverData.createdBy !== uid) return;
 
-                const currentReadOnly = !!serverData.readOnly;
-                const newReadOnly = !currentReadOnly;
+                const newReadOnly = !serverData.readOnly;
+                await set(ref(db, `servers/${currentServer}/readOnly`), newReadOnly, writeOptions());
+                headerReadOnlyBtnEl.textContent = `Read-Only Mode: ${newReadOnly ? "On" : "Off"}`;
+                
+                const botMessageText = newReadOnly 
+                    ? "🔒 Server Read-Only mode is now ON. Only the owner can send messages."
+                    : "🔓 Server Read-Only mode is now OFF. Everyone can send messages again.";
 
-                const promptMsg = newReadOnly
-                    ? "Are you sure you want to make this server read-only?"
-                    : "Are you sure you want to turn off read-only mode for this server?";
-
-                if (confirm(promptMsg)) {
-                    await set(ref(db, `servers/${serverCode}/readOnly`), newReadOnly, writeOptions());
-                    await sendBotMessage(serverCode, `🔒 Server Read-Only mode is now ${newReadOnly ? "ON" : "OFF"}. Only the owner can post messages.`);
-                }
+                await sendBotMessage(currentServer, botMessageText, null, true);
             } catch (err) {
-                console.error("Failed to toggle read-only mode:", err);
+                console.error("Failed to toggle read-only:", err);
             }
         });
     }
@@ -907,13 +857,11 @@ function attachUIListeners() {
         });
     }
 
-    if (contextJoinVoiceBtnEl) {
-        contextJoinVoiceBtnEl.addEventListener("click", (e) => {
-            e.stopPropagation();
-            if (contextMenuTargetServer) {
-                joinVoiceChat(contextMenuTargetServer);
+    if (headerVoicechatBtnEl) {
+        headerVoicechatBtnEl.addEventListener("click", () => {
+            if (currentServer && currentServer !== "public" && currentServer !== "announcements") {
+                joinVoiceChat(currentServer);
             }
-            hideContextMenu();
         });
     }
 
@@ -952,7 +900,30 @@ function attachUIListeners() {
                 });
             }
         });
-    }   
+    }  
+    
+    if (profilePicEl) {
+        const pfpInput = document.createElement("input");
+        pfpInput.type = "file";
+        pfpInput.accept = "image/*";
+        pfpInput.style.display = "none";
+        document.body.appendChild(pfpInput);
+
+        profilePicEl.style.cursor = "pointer";
+        profilePicEl.title = "Change profile picture";
+
+        profilePicEl.addEventListener("click", () => {
+            pfpInput.click();
+        });
+
+        pfpInput.addEventListener("change", (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                handlePfpUpload(file);
+            }
+            pfpInput.value = "";
+        });
+    }
 }
 
 
@@ -1165,22 +1136,14 @@ async function toggleKickUser(serverId, targetUid, targetUsername) {
 
 // SERVER SWITCHING
 async function switchServer(serverId) {
-    if (serverId === "system") {
-        if (activeUsersUnsub) activeUsersUnsub();
-        if (currentKickUnsub) {
-            currentKickUnsub();
-            currentKickUnsub = null;
-        }
-        if (unsubscribe) unsubscribe();
-
-        currentServer = "system";
-        switchView("system");
-        highlightActiveServer("system");
-        return;
-    }
-
     if (serverId === "announcements") {
         currentServer = "announcements";
+
+        if (headerMembersBtnEl) headerMembersBtnEl.classList.add("hidden");
+        if (headerVoicechatBtnEl) headerVoicechatBtnEl.classList.add("hidden");
+        if (headerReadOnlyBtnEl) headerReadOnlyBtnEl.classList.add("hidden");
+        if (rightSidebarEl) rightSidebarEl.style.display = "none";
+        if (chatHeaderNameEl) chatHeaderNameEl.textContent = "Announcements";
 
         if (isAdmin) {
             setInputDisabledState(false, "Post in #Announcements");
@@ -1207,6 +1170,34 @@ async function switchServer(serverId) {
         return;
     }
 
+    if (serverId === "system") {
+        if (activeUsersUnsub) activeUsersUnsub();
+        if (currentKickUnsub) {
+            currentKickUnsub();
+            currentKickUnsub = null;
+        }
+        if (unsubscribe) unsubscribe();
+
+        currentServer = "system";
+        switchView("system");
+        highlightActiveServer("system");
+
+        if (rightSidebarEl) {
+            rightSidebarEl.style.display = "none";
+        }
+
+        return;
+    }
+
+    if (serverId === "public") {
+        if (headerMembersBtnEl) headerMembersBtnEl.classList.remove("hidden");
+        if (headerVoicechatBtnEl) headerVoicechatBtnEl.classList.add("hidden");
+        if (headerReadOnlyBtnEl) headerReadOnlyBtnEl.classList.add("hidden");
+    } else {
+        if (headerMembersBtnEl) headerMembersBtnEl.classList.remove("hidden");
+        if (headerVoicechatBtnEl) headerVoicechatBtnEl.classList.remove("hidden");
+    }
+
     if (activeUsersUnsub) activeUsersUnsub();
 
     if (currentKickUnsub) {
@@ -1225,10 +1216,27 @@ async function switchServer(serverId) {
     }
 
     const data = serverSnap.val();
-    const serverName = data.name || serverId;
-
+    const serverName = serverId === "public" ? "Public" : (data.name || serverId);
     const isOwner = data.createdBy === uid;
     const isReadOnly = !!data.readOnly;
+
+    if (chatHeaderNameEl) {
+        if (isOwner && serverId !== "public" && serverId !== "announcements") {
+            chatHeaderNameEl.textContent = serverName + "  - 👑";
+            chatHeaderNameEl.style.whiteSpace = "pre-wrap";
+        } else {
+            chatHeaderNameEl.textContent = serverName;
+        }
+    }
+
+    if (headerReadOnlyBtnEl) {
+        if (isOwner && serverId !== "public" && serverId !== "announcements") {
+            headerReadOnlyBtnEl.classList.remove("hidden");
+            headerReadOnlyBtnEl.textContent = `Read-Only Mode: ${data.readOnly ? "On" : "Off"}`;
+        } else {
+            headerReadOnlyBtnEl.classList.add("hidden");
+        }
+    }
 
     if (isReadOnly && !isOwner) {
         setInputDisabledState(true, `You do not have permission to message in #${serverName}`);
@@ -1288,17 +1296,16 @@ async function switchServer(serverId) {
         if (msg.isDM) {
             const isSender = msg.uid === uid;
             const isReceiver = msg.dmToUid === uid;
-
-            if (!isSender && !isReceiver) {
-                return; 
-            }
+            if (!isSender && !isReceiver) return; 
         }
 
         const isGrouped =
             !msg.isDM &&
+            !msg.isSystem &&
             lastMessage &&
             lastMessage.uid === msg.uid &&
             Math.abs(msg.timestamp - lastMessage.timestamp) < 5 * 60 * 1000;
+        
         displayMessage(msg, isGrouped);
         lastMessage = msg;
         maybeNotify(msg, serverId);
@@ -1324,12 +1331,11 @@ async function switchServer(serverId) {
         loadAllMembers(serverId);
     }
     markServerAsRead(serverId);
-
 }
 
 function highlightActiveServer(serverId) {
     document.querySelectorAll(".serverRow").forEach(row => {
-        if (row.dataset.server === serverId) {
+        if (serverId && row.dataset.server === serverId) {
             row.classList.add("active");
         } else {
             row.classList.remove("active");
@@ -1338,10 +1344,6 @@ function highlightActiveServer(serverId) {
 
     publicServerBtnEl?.classList.toggle("active", serverId === "public");
     announcementsBtnEl?.classList.toggle("active", serverId === "announcements");
-}
-
-function updatePlaceholder(serverName) {
-    messageInputEl.setAttribute("data-placeholder", `Message #${serverName}`);
 }
 
 function switchView(targetView) {
@@ -1368,90 +1370,10 @@ function switchView(targetView) {
         .querySelectorAll(".tabBtn")
         .forEach(btn => btn.classList.remove("active"));
 
-    if (["guidelines", "feedbackForm", "feedbackViewer"].includes(targetView)) {
+    if (["guidelines"].includes(targetView)) {
         guidelinesBtnEl?.classList.add("active");
+        highlightActiveServer(null);
     }
-
-    if (targetView === "feedbackForm") {
-        if (feedbackMessageEl) feedbackMessageEl.value = "";
-        if (feedbackCategoryEl) feedbackCategoryEl.value = "Bug Report";
-        if (feedbackCharCountEl) {
-            feedbackCharCountEl.textContent = "0 / 2000";
-        }
-    }
-}
-
-async function submitFeedback() {
-    const category = feedbackCategoryEl.value;
-    const message = feedbackMessageEl.value.trim();
-
-    if (!category) {
-        alert("Please select a feedback category.");
-        return;
-    }
-
-    if (message.length < 5) {
-        alert("Please provide more details in your feedback.");
-        return;
-    }
-
-    const user = auth.currentUser;
-    const feedbackRef = push(ref(db, "feedback"));
-    const feedbackData = {
-        uid: user.uid,
-        username: usernameEl.innerText,
-        category: category,
-        message: message,
-        timestamp: Date.now()
-    };
-
-    await set(feedbackRef, feedbackData);
-
-    alert("Thank you! Your feedback has been submitted.");
-    switchView("guidelines");
-}
-
-async function loadFeedback() {
-    feedbackViewerEl.innerHTML = "<p>Loading feedback...</p>";
-    const feedbackRef = ref(db, "feedback");
-    const snapshot = await get(feedbackRef);
-    if (!snapshot.exists()) {
-        feedbackViewerEl.innerHTML = "<p>No feedback available.</p>";
-        return;
-    }
-
-    const feedbackArray = []
-
-    snapshot.forEach(child => {
-        const data = child.val();
-        feedbackArray.push({ id: child.key, ...data });
-    })
-
-    feedbackArray.sort((a, b) => b.timestamp - a.timestamp);
-
-    let html = ""
-    feedbackArray.forEach(fb => {
-        const date = new Date(fb.timestamp).toLocaleString([], {
-            year: "numeric",
-            month: "numeric",
-            day: "numeric",
-            hour: "numeric",
-            minute: "numeric"
-        });
-
-        html += `
-            <div class="feedbackMessage">
-                <div class="feedback-header">
-                    <span class="feedback-category">${fb.category.toUpperCase()}</span>
-                    <span class="feedback-timestamp">${date}</span>
-                </div>
-                <div class="feedback-body">${fb.message}</div>
-                <div class="feedback-footer">Submitted by: ${fb.username}</div>
-            </div>
-        `;
-    });
-
-    feedbackViewerEl.innerHTML = html;
 }
 
 function markServerAsRead(serverId) {
@@ -1558,7 +1480,6 @@ function addServerToSidebar(code, name) {
     const rowEl = document.createElement("div");
     rowEl.classList.add("serverRow");
     rowEl.dataset.server = code;
-    rowEl.title = code;
 
     const buttonEl = document.createElement("button");
     buttonEl.classList.add("serverButton");
@@ -1571,14 +1492,12 @@ function addServerToSidebar(code, name) {
     const hashEl = document.createElement("span");
     hashEl.classList.add("serverHash");
     if (code === "system") {
-        hashEl.classList.add("serverHash", "systemGear");
+        hashEl.classList.add("systemGear");
         hashEl.innerHTML = `<i class="fa-solid fa-gear"></i>`;
     } else if (code === currentVoiceServer) {
-        hashEl.classList.add("serverHash");
-        hashEl.innerHTML = `<i class="fa-solid fa-volume"></i>`;
+        hashEl.innerHTML = VOICE_ICON;
     } else {
-        hashEl.classList.add("serverHash");
-        hashEl.textContent = "#";
+        hashEl.innerHTML = HASH_ICON;
     }
 
     const nameEl = document.createElement("span");
@@ -1603,7 +1522,6 @@ function addServerToSidebar(code, name) {
 
 // LEAVE SERVER
 async function leaveServer(code) {
-    if (!confirm("Are you sure you want to leave this server?")) return;
     if (code === "public") {
         alert("You cannot leave the public server.");
         return;
@@ -1624,6 +1542,25 @@ async function leaveServer(code) {
         switchServer("public");
         updateNoServersMessage();
         return;
+    }
+
+    let isOwner = false;
+    try {
+        const serverSnap = await get(ref(db, `servers/${code}`));
+        const serverData = serverSnap.exists() ? serverSnap.val() : null;
+        isOwner = serverData && serverData.createdBy === uid;
+    } catch (err) {
+        console.error("Failed to check server ownership for deletion:", err);
+    }
+
+    const actionText = isOwner ? "delete this server entirely" : "leave this server";
+    if (!confirm(`Are you sure you want to ${actionText}?`)) return;
+
+    if (isOwner) {
+        await remove(ref(db, `servers/${code}`), writeOptions());
+    } else {
+        await remove(ref(db, `servers/${code}/activeUsers/${uid}`), writeOptions());
+        await remove(ref(db, `servers/${code}/members/${uid}`), writeOptions());
     }
 
     myServers = myServers.filter(s => s.code !== code);
@@ -1691,19 +1628,40 @@ async function updateKickButton(serverCode) {
 
 // FILE UPLOAD
 async function uploadFile(file) {
+    if (!auth.currentUser) {
+        throw new Error("You must be logged in to upload files.");
+    }
+
+    const cooldown = 30 * 1000; 
+    const timeSinceLastUpload = Date.now() - lastUploadTimestamp;
+    if (timeSinceLastUpload < cooldown) {
+        const remainingSecs = Math.ceil((cooldown - timeSinceLastUpload) / 1000);
+        alert(`Please wait ${remainingSecs} seconds before uploading another file.`)
+        throw new Error(`Please wait ${remainingSecs} seconds before uploading another file.`);
+    }
+
+    const token = await auth.currentUser.getIdToken();
+
     const formData = new FormData();
     formData.append("file", file);
 
     const res = await fetch(UPLOAD_URL, {
         method: "POST",
+        headers: {
+            "Authorization": `Bearer ${token}`
+        },
         body: formData
     });
 
-    if (!res.ok) throw new Error("Upload failed");
+    if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || "Upload failed");
+    }
+
+    lastUploadTimestamp = Date.now();
 
     const data = await res.json(); 
-    const base = UPLOAD_URL.replace("/upload", "");
-    return base + data.url;
+    return data.url;
 }
 
 function handleFileSelection(file) {
@@ -1777,13 +1735,10 @@ async function sendMessage() {
             return;
         }
 
-        // DM message object
         const dmMessage = {
             text: dm.messageBody || null,
-            username,
             uid: uid || "no-auth",
             timestamp: serverTimestamp(),
-            isAdmin: isAdmin || false,
             isDM: true,
             dmToUid: targetUid,
             dmTo: dm.mention,
@@ -1795,13 +1750,10 @@ async function sendMessage() {
         await push(messagesRef, dmMessage, writeOptions());
         enforceMessageLimit();
     } else {
-        // Normal message object
         const messageData = {
             text: text || null,
-            username,
             uid: uid || "no-auth",
             timestamp: serverTimestamp(),
-            isAdmin: isAdmin || false,
             fileUrl,
             fileName,
             fileType
@@ -1857,7 +1809,7 @@ async function postAnnouncement() {
         }
     }
 
-    const title = prompt("Enter announcement title (It is always a good idea to check with @𝙍乇𝘼𝙇𝙈𝙀𝙐𝙎𝙀 before posting an announcement):");
+    const title = prompt("Enter announcement title:");
     if (!title || !title.trim()) return;
 
     const announcementData = {
@@ -1880,13 +1832,13 @@ async function postAnnouncement() {
     attachedFileLabelEl.classList.add("hidden");
 }    
 
-async function sendBotMessage(serverId, text, action = null) {
+async function sendBotMessage(serverId, text, action = null, bypassReadOnly = false) {
     if (!serverId) return null;
     try {
         const serverRef = ref(db, `servers/${serverId}`);
         const serverSnap = await get(serverRef);
 
-        if (serverSnap.exists() && serverSnap.val().readOnly) {
+        if (!bypassReadOnly && serverSnap.exists() && serverSnap.val().readOnly) {
             return null;
         }
 
@@ -1928,7 +1880,6 @@ async function enforceMessageLimit() {
         for (const key of toDelete) {
             const msgData = messages[key];
 
-            // Delete file from server if attached
             if (msgData.fileUrl) {
                 const filename = msgData.fileUrl.split("/").pop();
                 const deleteUrl = UPLOAD_URL.replace("/upload", "") + "/delete-file?name=" + filename;
@@ -1937,31 +1888,58 @@ async function enforceMessageLimit() {
                     .catch(err => console.error("File delete failed:", err));
             }
 
-            // Delete message from Firebase
             await remove(child(messagesRef, key), writeOptions());
         }
     }
 }
 
 
+// MESSAGE DISPLAY
 function displayMessage(msg, isGrouped) {
+    let nameEl = null;
+    let avatarEl = null;
+
+    const profile = getProfile(msg.uid, (freshProfile) => {
+        if (nameEl) updateNameElement(nameEl, freshProfile, msg);
+        if (avatarEl) avatarEl.src = freshProfile.pfpUrl;
+    });
+
     const wrapper = document.createElement("div");
     wrapper.classList.add("message");
     if (msg.id) wrapper.dataset.id = msg.id;
     if (isGrouped) wrapper.classList.add("grouped");
     if (msg.isDM) wrapper.classList.add("dm-message");
 
-    wrapper.addEventListener("contextmenu", (e) => {
+    wrapper.addEventListener("contextmenu", async (e) => {
+        e.preventDefault();
         if (isAdmin) {
             showMessageContextMenu(e, msg);
+            return;
+        }
+        if (currentServer !== "public") {
+            try {
+                const serverSnap = await get(ref(db, `servers/${currentServer}`));
+                const serverData = serverSnap.exists() ? serverSnap.val() : null;
+                if (serverData && serverData.createdBy === uid) {
+                    showMessageContextMenu(e, msg);
+                }
+            } catch (err) {
+                console.error("Owner permission check failed:", err);
+            }
         }
     });
 
     if (!isGrouped) {
+        avatarEl = document.createElement("img");
+        avatarEl.classList.add("message-avatar");
+        avatarEl.src = profile.pfpUrl;
+        avatarEl.alt = "Avatar";
+        wrapper.appendChild(avatarEl);
+
         const header = document.createElement("div");
         header.classList.add("message-header");
 
-        const nameEl = document.createElement("span");
+        nameEl = document.createElement("span");
         nameEl.classList.add("username");
 
         if (msg.isDM) {
@@ -1969,10 +1947,8 @@ function displayMessage(msg, isGrouped) {
             dmTag.classList.add("dm-tag");
 
             if (msg.uid === uid) {
-                // You sent the DM
                 dmTag.textContent = `[DM to ${msg.dmTo}] `;
             } else {
-                // You received the DM
                 dmTag.textContent = `[DM] `;
             }
 
@@ -1980,26 +1956,17 @@ function displayMessage(msg, isGrouped) {
             nameEl.classList.add("dm-username");
         }
 
-        if (msg.isSystem) {
-            nameEl.textContent = msg.username;
-            nameEl.classList.add("system-username");
-        } else if (msg.isAdmin) {
-            nameEl.innerHTML = `
-                <span class="admin-username">${msg.username}</span>
-                <i class="fa-solid fa-circle-check admin-badge" title="Admin"></i>
-            `;
-        } else {
-            nameEl.textContent = msg.username;
-        }
+        updateNameElement(nameEl, profile, msg);
 
         if (!msg.isSystem) {
             nameEl.style.cursor = "pointer";
             nameEl.title = "Click to DM this user";
 
             nameEl.addEventListener("click", () => {
-                if (msg.username === username) return;
+                const currentName = nameEl.textContent.trim();
+                if (currentName === username || currentName === "Loading...") return;
 
-                messageInputEl.innerHTML = `<span class="input-mention" contenteditable="false">@${msg.username},</span>&nbsp;`;
+                messageInputEl.innerHTML = `<span class="input-mention" contenteditable="false">@${currentName},</span>&nbsp;`;
                 messageInputEl.focus();
                 const range = document.createRange();
                 const selection = window.getSelection();
@@ -2012,10 +1979,30 @@ function displayMessage(msg, isGrouped) {
 
         const timeEl = document.createElement("span");
         timeEl.classList.add("timestamp");
-        timeEl.textContent = new Date(msg.timestamp).toLocaleTimeString([], {
-            hour: "2-digit",
+
+        const msgDate = new Date(msg.timestamp);
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+
+        const timeStr = msgDate.toLocaleTimeString([], {
+            hour: "numeric",
             minute: "2-digit"
         });
+
+        if (msgDate >= today) {
+            timeEl.textContent = timeStr;
+        } else if (msgDate >= yesterday) {
+            timeEl.textContent = `Yesterday at ${timeStr}`;
+        } else {
+            const dateStr = msgDate.toLocaleDateString([], {
+                month: "short",
+                day: "numeric",
+                year: "numeric"
+            });
+            timeEl.textContent = `${dateStr} ${timeStr}`;
+        }
 
         header.appendChild(nameEl);
         header.appendChild(timeEl);
@@ -2047,7 +2034,6 @@ function displayMessage(msg, isGrouped) {
         fileWrapper.classList.add("file-message");
 
         if (msg.fileType && msg.fileType.startsWith("image/")) {
-            // Image
             const imgEl = document.createElement("img");
             imgEl.src = msg.fileUrl;
             imgEl.classList.add("server-image");
@@ -2062,7 +2048,6 @@ function displayMessage(msg, isGrouped) {
 
             fileWrapper.appendChild(imgEl);
         } else {
-            // File box
             const fileBox = document.createElement("div");
             fileBox.classList.add("file-box");
 
@@ -2171,6 +2156,23 @@ function displayAnnouncement(msg) {
     }
 }
 
+function updateNameElement(nameEl, profile, msg) {
+    const displayUsername = msg.isSystem ? msg.username : profile.username;
+    const displayIsAdmin = msg.isSystem ? false : profile.isAdmin;
+
+    if (msg.isSystem) {
+        nameEl.textContent = displayUsername;
+        nameEl.classList.add("system-username");
+    } else if (displayIsAdmin) {
+        nameEl.innerHTML = `
+            <span class="admin-username">${displayUsername}</span>
+            <i class="fa-solid fa-circle-check admin-badge" title="Admin"></i>
+        `;
+    } else {
+        nameEl.textContent = displayUsername;
+    }
+}
+
 function formatMessage(text) {
     if (!text) return;
 
@@ -2180,6 +2182,35 @@ function formatMessage(text) {
         const cleanUrl = url.replace(/[.,;!?]+$/, "");
         return `<a href="${cleanUrl}" target="_blank" rel="noopener noreferrer" class="chat-link">${cleanUrl}</a>`;
     });
+}
+
+function getProfile(targetUid, onUpdate) {
+    if (targetUid === "system" || targetUid === "no-auth") {
+        return { username: "Server Bot", isAdmin: false, pfpUrl: "/client/Assets/botPfp.png" };
+    }
+    
+    if (userCache[targetUid]) {
+        return userCache[targetUid];
+    }
+
+    const fallback = { username: "Loading...", isAdmin: false, pfpUrl: "/client/Assets/pfp.png" };
+
+    Promise.all([
+        get(ref(db, `users/${targetUid}`)),
+        get(ref(db, `admins/${targetUid}`))
+    ]).then(([userSnap, adminSnap]) => {
+        const userData = userSnap.exists() ? userSnap.val() : {};
+        const profile = {
+            username: userData.username || "Unknown User",
+            pfpUrl: userData.pfpUrl || "/client/Assets/pfp.png", // Fallback to default asset
+            isAdmin: adminSnap.exists() && adminSnap.val() === true
+        };
+
+        userCache[targetUid] = profile;
+        if (onUpdate) onUpdate(profile);
+    }).catch(err => console.error("Profile resolution failed:", err));
+
+    return fallback;
 }
 
 
@@ -2218,7 +2249,9 @@ function setupActiveUserListener(code) {
     if (!activeMembersListEl) return;
     activeMembersListEl.innerHTML = "";
 
+    const isPublic = (code === "public" || code === "announcements");
     const activeRef = ref(db, `servers/${code}/activeUsers`);
+    const serverRef = ref(db, `servers/${code}`);
 
     activeUsersUnsub = onValue(activeRef, (snap) => {
         activeMembersListEl.innerHTML = "";
@@ -2228,11 +2261,42 @@ function setupActiveUserListener(code) {
             return;
         }
 
-        snap.forEach((childSnap) => {
-            const userData = childSnap.val();
-            const li = document.createElement("li");
-            li.textContent = userData.username;
-            activeMembersListEl.appendChild(li);
+        const fetchOwner = isPublic ? Promise.resolve(null) : get(serverRef);
+
+        fetchOwner.then((serverSnap) => {
+            let ownerUid = null;
+            if (serverSnap && serverSnap.exists()) {
+                ownerUid = serverSnap.val().createdBy;
+            }
+
+            snap.forEach((childSnap) => {
+                const userData = childSnap.val();
+                const username = userData.username;
+                const userUid = userData.uid || childSnap.key;
+                const isOwner = !isPublic && (userUid === ownerUid);
+
+                const li = document.createElement("li");
+
+                get(ref(db, `admins/${userUid}`)).then((adminSnap) => {
+                    const isUserAdmin = adminSnap.exists() && adminSnap.val() === true;
+
+                    if (isOwner && isUserAdmin) {
+                        li.innerHTML = `<span class="member-list-admin">${username}</span> <i class="fa-solid fa-circle-check admin-badge" title="Admin"></i> <span title="Server owner">👑</span>`;
+                    } else if (isOwner && !isUserAdmin) {
+                        li.innerHTML = `${username} <span title="Server owner">👑</span>`;
+                    } else if (isUserAdmin && !isOwner) {
+                        li.innerHTML = `<span class="member-list-admin">${username}</span> <i class="fa-solid fa-circle-check admin-badge" title="Admin"></i>`;
+                    } else {
+                        li.textContent = username;
+                    }
+                }).catch(() => {
+                    li.textContent = username;
+                });
+
+                activeMembersListEl.appendChild(li);
+            });
+        }).catch((err) => {
+            console.error("Failed to load server owner:", err);
         });
     });
 }
@@ -2271,22 +2335,40 @@ async function loadAllMembers(code) {
         allMembersListEl.innerHTML = "";
 
         const serverData = serverSnap.exists() ? serverSnap.val() : null;
-        const isOwner = serverData && serverData.createdBy === uid;
-        const canManageKicks = isOwner || isAdmin;
+        const ownerUid = serverData ? serverData.createdBy : null;
+        const isOwnerForKicks = serverData && serverData.createdBy === uid;
+        const canManageKicks = isOwnerForKicks || isAdmin;
 
         if (membersSnap.exists()) {
             const memberUids = Object.keys(membersSnap.val());
 
             for (const memberUid of memberUids) {
-                const userSnap = await get(ref(db, `users/${memberUid}/username`));
+                const [userSnap, adminSnap] = await Promise.all([
+                    get(ref(db, `users/${memberUid}/username`)),
+                    get(ref(db, `admins/${memberUid}`))
+                ]);
 
                 if (!userSnap.exists()) {
                     await remove(ref(db, `servers/${code}/members/${memberUid}`), writeOptions());
                     continue;
                 }
 
+                const username = userSnap.val();
+                const isUserAdmin = adminSnap.exists() && adminSnap.val() === true;
+                const isOwner = !isPublic && (memberUid === ownerUid);
+
                 const li = document.createElement("li");
-                li.textContent = userSnap.val();
+
+                if (isOwner && isUserAdmin) {
+                    li.innerHTML = `<span class="member-list-admin">${username}</span> <i class="fa-solid fa-circle-check admin-badge" title="Admin"></i> <span title="Server owner">👑</span>`;
+                } else if (isOwner && !isUserAdmin) {
+                    li.innerHTML = `${username} <span title="Server owner">👑</span>`;
+                } else if (isUserAdmin && !isOwner) {
+                    li.innerHTML = `<span class="member-list-admin">${username}</span> <i class="fa-solid fa-circle-check admin-badge" title="Admin"></i>`;
+                } else {
+                    li.textContent = username;
+                }
+
                 allMembersListEl.appendChild(li);
             }
         }
@@ -2326,6 +2408,113 @@ async function loadAllMembers(code) {
     } catch (err) {
         console.error("Failed to load members:", err);
         allMembersListEl.innerHTML = "<li>Error loading members</li>";
+    }
+}
+
+
+// PROFILE PICTURE
+async function resizeImage(file, size = 256, quality = 0.85) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = (event) => {
+            const img = new Image();
+            img.src = event.target.result;
+            img.onload = () => {
+                let width = img.width;
+                let height = img.height;
+                let cropX = 0, cropY = 0, cropSize = 0;
+
+                if (width === height) {
+                    cropSize = width;
+                } else if (width > height) {
+                    cropSize = height;
+                    cropX = (width - height) / 2; 
+                    cropY = 0;
+                } else {
+                    cropSize = width; 
+                    cropX = 0;
+                    cropY = (height - width) / 2; 
+                }
+
+                const canvas = document.createElement("canvas");
+                canvas.width = size; 
+                canvas.height = size; 
+                const ctx = canvas.getContext("2d");
+
+                ctx.drawImage(img, cropX, cropY, cropSize, cropSize, 0, 0, size, size);
+
+                canvas.toBlob((blob) => {
+                    if (!blob) {
+                        reject(new Error("Canvas to Blob conversion failed"));
+                        return;
+                    }
+                    const resizedFile = new File([blob], "avatar.webp", {
+                        type: "image/webp",
+                        lastModified: Date.now()
+                    });
+                    resolve(resizedFile);
+                }, "image/webp", quality);
+            };
+            img.onerror = (err) => reject(err);
+        };
+        reader.onerror = (err) => reject(err);
+    });
+}
+
+async function handlePfpUpload(file) {
+    if (!file || !file.type.startsWith("image/")) {
+        alert("Please select a valid image file.");
+        return;
+    }
+
+    try {
+        if (!uid) return;
+
+        const userRef = ref(db, `users/${uid}`);
+        const userSnap = await get(userRef);
+        const userData = userSnap.exists() ? userSnap.val() : {};
+        
+        const lastChange = userData.lastPfpChange || 0;
+        const cooldown = 60 * 1000; 
+        const timeElapsed = Date.now() - lastChange;
+
+        if (timeElapsed < cooldown) {
+            const remainingSecs = Math.ceil((cooldown - timeElapsed) / 1000);
+            alert(`Please wait ${remainingSecs} seconds before changing your profile picture again.`);
+            return;
+        }
+
+        console.log("Resizing profile picture...");
+        const resizedFile = await resizeImage(file, 256, 256, 0.85);
+
+        const oldPfpUrl = userData.pfpUrl;
+
+        console.log(`Uploading resized PFP (${Math.round(resizedFile.size / 1024)} KB)...`);
+        const pfpUrl = await uploadFile(resizedFile);
+
+        if (oldPfpUrl && oldPfpUrl.includes("cdn.acetyl.cc")) {
+            const oldFileName = oldPfpUrl.split("/").pop();
+            if (oldFileName) {
+                const deleteUrl = `${UPLOAD_URL.replace("/upload", "")}/delete-file?name=${oldFileName}`;
+                fetch(deleteUrl, { method: "DELETE" }).catch(err => console.error("Old PFP cleanup failed:", err));
+            }
+        }
+
+        await set(userRef, {
+            ...userData,
+            pfpUrl: pfpUrl,
+            username: username,
+            lastPfpChange: Date.now()
+        }, writeOptions());
+
+        const pfpEl = document.getElementById("profilePicture");
+        if (pfpEl) pfpEl.src = pfpUrl;
+
+        alert("Profile picture updated successfully!");
+    } catch (err) {
+        console.error("PFP upload failed:", err);
+        alert("Failed to update profile picture. Try again.");
     }
 }
 
@@ -2383,6 +2572,11 @@ async function joinVoiceChat(serverCode) {
         return;
     }
 
+    if (voiceHeaderNameEl) {
+        const serverName = serverCode === "public" ? "Public" : (myServers.find(s => s.code === serverCode)?.name || serverCode);
+        voiceHeaderNameEl.textContent = serverName;
+    }
+
     try {
         const voiceSnapshot = await get(ref(db, `servers/${serverCode}/voice`));
         if (voiceSnapshot.exists()) {
@@ -2422,21 +2616,17 @@ async function joinVoiceChat(serverCode) {
 
     switchView("voice");
 
-    const botMsgRef = await sendBotMessage(serverCode, `🔊 @${username} is currently in voice chat`, {
-        type: "JOIN_VOICE",
-        serverCode: serverCode
-    });
-
-    currentVoiceMsgKey = botMsgRef ? botMsgRef.key : null;
-
     const voiceUserRef = ref(db, `servers/${serverCode}/voice/${uid}`);
-    if (typeof onDisconnect === "function") {
-        onDisconnect(voiceUserRef).remove().catch(() => {});
-        
-        if (currentVoiceMsgKey) {
-            const msgRef = ref(db, `servers/${serverCode}/messages/${currentVoiceMsgKey}`);
-            onDisconnect(msgRef).remove().catch(() => {});
-        }
+    const existingSnap = await get(voiceUserRef);
+
+    if (existingSnap.exists() && existingSnap.val().msgKey) {
+        currentVoiceMsgKey = existingSnap.val().msgKey;
+    } else {
+        const botMsgRef = await sendBotMessage(serverCode, `🔊 @${username} is currently in voice chat`, {
+            type: "JOIN_VOICE",
+            serverCode: serverCode
+        });
+        currentVoiceMsgKey = botMsgRef ? botMsgRef.key : null;
     }
 
     await set(voiceUserRef, {
@@ -2570,7 +2760,7 @@ function listenToVoiceUsers(serverCode) {
             card.className = "voice-card";
             card.id = `voice-card-${userUid}`;
             card.innerHTML = `
-                <div class="username">${displayName}${isSelf ? " (You)" : ""}</div>
+                <div class="voiceUsername">${displayName}${isSelf ? " (You)" : ""}</div>
             `;
 
             gridEl.appendChild(card);
@@ -2764,11 +2954,11 @@ function updateServerVoiceIcons() {
         if (!hashEl) return;
 
         if (code === currentVoiceServer) {
-            hashEl.innerHTML = `<i class="fa-solid fa-volume-high"></i>`;
+            hashEl.innerHTML = VOICE_ICON;
         } else if (code === "system") {
             hashEl.innerHTML = `<i class="fa-solid fa-gear"></i>`;
         } else {
-            hashEl.textContent = "#";
+            hashEl.innerHTML = HASH_ICON;
         }
     });
 }
@@ -2831,8 +3021,8 @@ function initSettingsUI() {
         'setting-message-sound': 'messageSound',
         'setting-notifications': 'notifications',
         'setting-unread-badge': 'unreadBadge',
+        'setting-pfp': 'showPfp',
         'setting-startup-sidebar': 'startupSidebar',
-        'setting-cloudflare-turn': 'cloudflareTurn'
     };
 
     Object.keys(checkboxMap).forEach(id => {
@@ -2866,19 +3056,6 @@ function applySettings(changedKey = null) {
         document.documentElement.classList.toggle('high-contrast', !!appSettings.highContrast);
     }
 
-    if (!changedKey || changedKey === 'startupSidebar') {
-    const rightSidebar = document.getElementById('rightSidebar');
-        if (rightSidebar) {
-            if (appSettings.startupSidebar) {
-            rightSidebar.style.display = 'flex';
-            rightSidebar.classList.remove('hidden');
-            } else {
-            rightSidebar.style.display = 'none';
-            rightSidebar.classList.add('hidden');
-            }
-        }
-    }
-
     if (changedKey === 'notifications' && appSettings.notifications) {
         if ('Notification' in window && Notification.permission === 'default') {
         Notification.requestPermission();
@@ -2890,6 +3067,10 @@ function applySettings(changedKey = null) {
             const badges = document.querySelectorAll('.unreadBadge');
             badges.forEach(badge => badge.style.display = 'none');
         }
+    }
+
+    if (!changedKey || changedKey === 'showPfp') {
+        document.documentElement.classList.toggle('hide-pfp', !appSettings.showPfp);
     }
 }
 
@@ -3019,47 +3200,25 @@ async function showServerContextMenu(e, serverCode) {
     updateKickButton(serverCode);
 
     const isSystem = serverCode === "system";
-    if (contextServerMembersBtnEl) contextServerMembersBtnEl.style.display = isSystem ? "none" : "block";
     if (contextInviteBtnEl) contextInviteBtnEl.style.display = isSystem ? "none" : "block";
     if (contextKickBtnEl) contextKickBtnEl.style.display = isSystem ? "none" : "block";
-    if (contextReadOnlyBtnEl) {
-        if (isSystem) {
-            contextReadOnlyBtnEl.style.display = "none";
-        } else {
-            try {
-                const serverSnap = await get(ref(db, `servers/${serverCode}`));
-                const serverData = serverSnap.exists() ? serverSnap.val() : null;
-                
-                if (serverData && serverData.createdBy === uid) {
-                    contextReadOnlyBtnEl.style.display = "block";
-                    const isReadOnly = !!serverData.readOnly;
-                    contextReadOnlyBtnEl.textContent = `Read-Only Mode: ${isReadOnly ? "On" : "Off"}`;
-                } else {
-                    contextReadOnlyBtnEl.style.display = "none";
-                }
-            } catch (err) {
-                contextReadOnlyBtnEl.style.display = "none";
+
+    if (contextLeaveBtnEl) {
+        try {
+            const serverSnap = await get(ref(db, `servers/${serverCode}`));
+            const serverData = serverSnap.exists() ? serverSnap.val() : null;
+            const isOwner = serverData && serverData.createdBy === uid;
+
+            if (isOwner) {
+                contextLeaveBtnEl.textContent = "Delete Server";
+                contextLeaveBtnEl.classList.add("danger");
+            } else {
+                contextLeaveBtnEl.textContent = "Leave Server";
+                contextLeaveBtnEl.classList.add("danger");
             }
-        }
-    }
-
-    if (contextJoinVoiceBtnEl) {
-        contextJoinVoiceBtnEl.style.display = isSystem ? "none" : "block";
-
-        if (!isSystem) {
-            let voiceCount = 0;
-            try {
-                const voiceSnapshot = await get(ref(db, `servers/${serverCode}/voice`));
-                if (voiceSnapshot.exists()) {
-                    voiceCount = Object.keys(voiceSnapshot.val()).length;
-                }
-            } catch (err) {
-                console.error("Error fetching voice user count:", err);
-            }
-
-            contextJoinVoiceBtnEl.textContent = voiceCount > 0 
-                ? `Join Voice Chat (${voiceCount})` 
-                : "Join Voice Chat";
+        } catch (err) {
+            contextLeaveBtnEl.textContent = "Leave Server";
+            contextLeaveBtnEl.classList.add("danger");
         }
     }
 
@@ -3105,19 +3264,45 @@ function hideContextMenu(e) {
         messageContextMenu.classList.add("hidden");
     }
     targetContextMenuMsg = null;
+
+    document.querySelectorAll(".message.right-clicked").forEach(el => {
+        el.classList.remove("right-clicked");
+    });
 }
 
 async function showMessageContextMenu(e, msg) {
     e.preventDefault();
     e.stopPropagation();
 
+    document.querySelectorAll(".message.right-clicked").forEach(el => {
+        el.classList.remove("right-clicked");
+    });
+
     targetContextMenuMsg = msg;
+
+    const msgEl = messagesListEl.querySelector(`[data-id="${msg.id}"]`);
+    if (msgEl) {
+        msgEl.classList.add("right-clicked");
+    }
 
     const serverSnap = await get(ref(db, `servers/${currentServer}`));
     const serverData = serverSnap.exists() ? serverSnap.val() : null;
     const isOwner = serverData && serverData.createdBy === uid;
-    const canKick = (isOwner || isAdmin) && currentServer !== "public" && currentServer !== "announcements";
+    const targetAdminSnap = await get(ref(db, `admins/${msg.uid}`));
+    const isTargetAdmin = targetAdminSnap.exists() && targetAdminSnap.val() === true;
 
+    const canDelete = isAdmin || isOwner;
+    if (msgContextDelete) {
+        if (canDelete) {
+            msgContextDelete.classList.remove("disabled");
+            msgContextDelete.style.display = "block";
+        } else {
+            msgContextDelete.classList.add("disabled");
+            msgContextDelete.style.display = "none";
+        }
+    }
+
+    const canKick = (isAdmin && currentServer !== "public") || (isOwner && currentServer !== "public");
     if (msgContextKick) {
         if (canKick) {
             msgContextKick.classList.remove("disabled");
@@ -3128,11 +3313,18 @@ async function showMessageContextMenu(e, msg) {
         }
     }
 
+    if (msgContextGetUid) {
+        msgContextGetUid.style.display = isAdmin ? "block" : "none";
+    }
+
+    if (msgContextBan) {
+        msgContextBan.style.display = isAdmin ? "block" : "none";
+    }
+
     if (msgContextMuteBtnEl) {
         if (isAdmin && msg.uid !== uid) {
             try {
-                const adminSnap = await get(ref(db, `admins/${msg.uid}`));
-                if (!adminSnap.exists()) {
+                if (!isTargetAdmin) {
                     const muteSnap = await get(ref(db, `mutes/${msg.uid}`));
                     msgContextMuteBtnEl.textContent = muteSnap.exists() ? "Unmute User" : "Mute User";
                     msgContextMuteBtnEl.classList.remove("disabled");
@@ -3165,26 +3357,25 @@ async function showMessageContextMenu(e, msg) {
 }
 
 async function handleInvite() {
-    const rawHash = window.location.hash;
-    if (!rawHash || rawHash.length <= 1) return false;
-
-    const joinCode = rawHash.substring(1).trim();
+    const urlParams = new URLSearchParams(window.location.search);
+    const joinCode = urlParams.get('invite');
+    
     if (!joinCode) return false;
 
-    history.replaceState("", document.title, window.location.pathname + window.location.search);
+    history.replaceState("", document.title, window.location.pathname);
 
     if (joinCode === "public" || joinCode === "announcements" || myServers.some(s => s.code === joinCode)) {
         switchServer(joinCode);
         return true;
     }
 
-    const kickSnap = await get(ref(db, `servers/${joinCode}/kicked/${uid}`));
-    if (kickSnap.exists()) {
-        alert("You have been kicked from this server.");
-        return false;
-    }
-
     try {
+        const kickSnap = await get(ref(db, `servers/${joinCode}/kicked/${uid}`));
+        if (kickSnap.exists()) {
+            alert("You have been kicked from this server.");
+            return false;
+        }
+
         const serverRef = ref(db, `servers/${joinCode}`);
         const snapshot = await get(serverRef);
 
@@ -3208,6 +3399,7 @@ async function handleInvite() {
         
         return true;
     } catch (err) {
+        console.error("Failed to handle invite:", err);
         return false;
     }
 }

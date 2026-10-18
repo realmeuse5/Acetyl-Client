@@ -86,7 +86,7 @@
 
 #section-2 video {
     max-width: 100%;
-    max-height: 450px;
+    max-height: 300px;
     object-fit: contain;
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
 }
@@ -177,6 +177,7 @@
     align-items: center;
     border-top: #29292d 1px solid;
     margin-top: 50px;
+    justify-content: center;
 }
 
 #section-4 h1 {
