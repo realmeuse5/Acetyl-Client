@@ -1177,6 +1177,7 @@ a {
     display: flex;
     flex-direction: column;
     height: 95vh;
+    overflow: hidden;
 }
 
 #voiceBackBtn {
@@ -1215,7 +1216,7 @@ a {
     display: grid;
     grid-template-columns: repeat(2, minmax(320px, 550px));
     justify-content: center;
-    align-content: center;
+    align-content: start;
     justify-items: center;
     flex: 1;
     gap: 20px;
@@ -1257,13 +1258,31 @@ a {
     box-shadow: 0 0 15px rgba(80, 80, 80, 0.3);
 }
 
-.voice-card .voiceUsername {
-    color: #fff;
-    font-size: clamp(1.1rem, 2vw, 1.6rem);
-    font-family: "DM Sans", sans-serif;
-    font-weight: 600;
-    text-align: center;
-    word-break: break-word;
+.voiceUsername {
+    position: absolute;
+    bottom: 12px;
+    left: 12px;
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: #dbdee1;
+    background-color: rgba(18, 18, 20, 0.65);
+    padding: 4px 8px;
+    border-radius: 4px;
+    max-width: calc(100% - 24px);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.voicUsername i {
+    font-size: 0.8rem;
+}
+
+.voice-avatar {
+    width: 88px;
+    height: 88px;
+    border-radius: 50%;
+    object-fit: cover;
 }
 
 /* SYSTEM SETTINGs */

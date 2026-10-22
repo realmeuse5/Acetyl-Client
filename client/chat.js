@@ -248,8 +248,6 @@ async function finishAppLoad() {
         rightSidebarEl.style.display = 'none';
     }
 
-    if (Notification.permission !== "granted") Notification.requestPermission();
-
     myServers.forEach(server => {
         setupNotificationListener(server.code);
     });
@@ -2636,6 +2634,14 @@ async function joinVoiceChat(serverCode) {
         msgKey: currentVoiceMsgKey
     });
 
+    onDisconnect(voiceUserRef).remove(writeOptions());
+    if (currentVoiceMsgKey) {
+        const botMsgRef = ref(db, `servers/${serverCode}/messages/${currentVoiceMsgKey}`);
+        onDisconnect(botMsgRef).remove(writeOptions());
+    }
+
+    rightSidebarEl.style.display = 'none';
+
     setupSpeakingIndicator(localAudioStream, uid);
 
     listenToVoiceUsers(serverCode);
@@ -2748,19 +2754,30 @@ function listenToVoiceUsers(serverCode) {
         activeUids.forEach((userUid) => {
             const userData = users[userUid];
             const isSelf = userUid === uid;
+            const isMuted = userData.vcMuted === true;
 
             if (!isSelf && !peerConnections[userUid]) {
                 const isInitiator = uid < userUid;
                 createPeerConnection(userUid, isInitiator, serverCode);
             }
 
-            const displayName = userData.username || "Anonymous";
+            const displayName = userData.username;
 
             const card = document.createElement("div");
             card.className = "voice-card";
             card.id = `voice-card-${userUid}`;
+
+            const profile = getProfile(userUid, (freshProfile) => {
+                const imgEl = card.querySelector(".voice-avatar");
+                if (imgEl) imgEl.src = freshProfile.pfpUrl;
+            });
+
             card.innerHTML = `
-                <div class="voiceUsername">${displayName}${isSelf ? " (You)" : ""}</div>
+                <img class="voice-avatar" src="${profile.pfpUrl}" alt="Avatar">
+                <div class="voiceUsername">
+                    <span>${displayName}</span>
+                    ${isMuted ? '<i class="fa-solid fa-microphone-slash voice-muted-icon" title="Muted"></i>' : ''}
+                </div>
             `;
 
             gridEl.appendChild(card);
@@ -3141,10 +3158,18 @@ function maybeNotify(msg, serverId) {
             if (found) serverName = found.name;
         }
 
-        const title = `${msg.username} sent a message`;
+        const profile = getProfile(msg.uid, (freshProfile) => {});
+
+        const senderName = profile.username && profile.username !== "Loading..." ? profile.username : "Someone";
+        const senderIcon = profile.pfpUrl || "/client/Assets/pfp.png";
+
+        const title = `${senderName} sent a message`;
         const body = `on #${serverName}`;
 
-        new Notification(title, { body });
+        new Notification(title, { 
+            body, 
+            icon: senderIcon 
+        });
     }
 }
 
