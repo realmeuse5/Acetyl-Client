@@ -405,6 +405,10 @@ async function handleLogout() {
 
     console.log("[Action] Logout requested...");
     try {
+        if (uid && currentServer && currentServer !== "system" && currentServer !== "announcements") {
+            const activeUserRef = ref(db, `servers/${currentServer}/activeUsers/${uid}`);
+            await remove(activeUserRef, writeOptions());
+        }
         localStorage.removeItem("username");
         await signOut(auth);
         window.location.reload();
