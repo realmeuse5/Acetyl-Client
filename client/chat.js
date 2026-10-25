@@ -5,6 +5,13 @@ import {
     remove, get, child, set, onDisconnect, onValue,
     serverTimestamp, query, orderByChild
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+import { 
+    createUserWithEmailAndPassword, 
+    signInWithEmailAndPassword, 
+    signInAnonymously, 
+    sendEmailVerification,
+    signOut
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
 
 // CONSTANTS
@@ -50,6 +57,7 @@ let appSettings = JSON.parse(localStorage.getItem('settings')) || { ...DEFAULT_S
 let isMuted = false;
 let muteUnsub = null;
 let lastUploadTimestamp = 0;
+let isHandlingSignup = false;
 
 
 // UI ELEMENTS
@@ -103,6 +111,8 @@ let headerMembersBtnEl;
 let chatHeaderNameEl;
 let profilePicEl;
 let voiceHeaderNameEl;
+let authScreenEl;
+let logoutBtnEl;
 
 function writeOptions() { return { auth: { uid } }; }
 
@@ -140,7 +150,6 @@ window.onload = async () => {
     contextInviteBtnEl = document.getElementById("contextInvite");
     contextKickBtnEl = document.getElementById("contextKick");
     newMessage = new Audio('/client/Assets/newMessage.mp3')
-    
     messageContextMenu = document.getElementById("messageContextMenu");
     msgContextGetUid = document.getElementById("msgContextGetUid");
     msgContextBan = document.getElementById("msgContextBan");
@@ -160,9 +169,12 @@ window.onload = async () => {
     chatHeaderNameEl = document.getElementById("chatHeaderName");
     profilePicEl = document.getElementById("profilePicture")
     voiceHeaderNameEl = document.getElementById("voiceHeaderName")
+    authScreenEl = document.getElementById("authScreen");
+    logoutBtnEl = document.getElementById("logOut");
 
     await initAuthMode();
     initSettingsUI();
+    initAuthScreenUI();
     applySettings();
 
     views = {
@@ -185,21 +197,57 @@ window.onload = async () => {
 
     // Firebase Auth Mode
     auth.onAuthStateChanged(async (user) => {
-        if (!user) return;
+        if (isHandlingSignup) return;
+
+        username = "";
+        if (usernameEl) usernameEl.textContent = "";
+        myServers = [];
+        if (serverListEl) serverListEl.innerHTML = "";
+        const noServersMsg = document.getElementById("noServersMsg");
+        if (noServersMsg) noServersMsg.style.display = "block";
+
+        if (!user) {
+            console.log("%cStatus: No user signed in (Logged Out)", "color: #e74c3c;");
+            
+            if (webContainerEl) webContainerEl.style.display = "none";
+            if (authScreenEl) authScreenEl.style.display = "flex";
+            if (loadingScreenEl) loadingScreenEl.classList.add("fade-out");
+            return;
+        }
+
+        if (!user.isAnonymous && !user.emailVerified) {
+            console.log("%cStatus: Email user is NOT verified. Forcing sign-out.", "color: #e74c3c;");
+
+            await signOut(auth);
+
+            if (webContainerEl) webContainerEl.style.display = "none";
+            if (authScreenEl) authScreenEl.style.display = "flex";
+            if (loadingScreenEl) loadingScreenEl.classList.add("fade-out");
+
+            alert("Your email address has not been verified yet. Please check your inbox for the verification link before logging in.");
+            return;
+        }
+
+        console.log(`%cStatus: User Authenticated`, "color: #2ecc71; font-weight: bold;");
+        console.log(`- UID: ${user.uid}`);
+        console.log(`- Is Anonymous: ${user.isAnonymous}`);
+
+        if (authScreenEl) authScreenEl.style.display = "none";
+        if (webContainerEl) webContainerEl.style.display = "flex";
 
         uid = user.uid;
         window.uid = user.uid;
-        await checkBanStatus(uid)
+        
+        await checkBanStatus(uid);
         await finishAppLoad();
     });
-
 };
 
 async function finishAppLoad() {
     listenToMuteStatus();
     const newUser = await loadSavedUser(uid);
 
-    await loadSavedServers();
+    await loadUserServers();
     await validateSavedServers();
     initSettingsUI();
 
@@ -207,11 +255,6 @@ async function finishAppLoad() {
 
     if (newUser) {
         console.log("Detected new user");
-        alert(
-            "Welcome! Since this is your first time using Acetyl Client, " +
-            "please take a moment to read the Community Guidelines. " +
-            "After that, you can head to the Public server and start chatting. "
-        );
         await set(ref(db, `users/${uid}/username`), username, writeOptions());
         localStorage.setItem("username", username);
         switchView("guidelines");
@@ -253,6 +296,177 @@ async function finishAppLoad() {
     });
 }
 
+async function handleEmailLogin(email, password) {
+    console.log(`[Action] Attempting Email Login for: ${email}`);
+
+    try {
+        await signInWithEmailAndPassword(auth, email, password);
+        console.log("%c[Action] Email login successful.", "color: #2ecc71;");
+    } catch (error) {
+        console.error("[Action Error] Email login failed:", error);
+
+        let errorMsg = "Login failed.";
+        if (error.code === "auth/invalid-credential" || error.code === "auth/wrong-password" || error.code === "auth/user-not-found") {
+            errorMsg = "Invalid email or password.";
+        } else if (error.code === "auth/invalid-email") {
+            errorMsg = "Please enter a valid email address.";
+        } else if (error.code === "auth/too-many-requests") {
+            errorMsg = "Access temporarily disabled due to too many failed login attempts. Try again later.";
+        }
+        alert(errorMsg);
+    }
+}
+
+async function handleEmailSignup(email, password, usernameInput) {
+    console.log(`[Action] Attempting Email Signup for: ${email}`);
+
+    const cleanedUsername = usernameInput.trim();
+    if (!cleanedUsername || cleanedUsername.length > 24 || /[.#$\[\]",]/.test(cleanedUsername)) {
+        alert("Invalid username. Please keep it under 24 characters and avoid special characters.");
+        return;
+    }
+
+    isHandlingSignup = true;
+
+    try {
+        const usersSnap = await get(ref(db, "users"));
+        if (usersSnap.exists()) {
+            const users = usersSnap.val();
+            for (const uidKey in users) {
+                if (users[uidKey].username && users[uidKey].username.toLowerCase() === cleanedUsername.toLowerCase()) {
+                    alert("That username is already taken. Please choose another one.");
+                    isHandlingSignup = false; 
+                    return;
+                }
+            }
+        }
+
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        const user = userCredential.user;
+        console.log("%c[Action] Email signup successful. User created with UID:", "color: #2ecc71;", user.uid);
+
+        await set(ref(db, `users/${user.uid}/username`), cleanedUsername, writeOptions());
+
+        await sendEmailVerification(user);
+        console.log("%c[Action] Verification email sent.", "color: #2ecc71;");
+
+        await signOut(auth);
+
+        alert("Account created successfully! A verification email has been sent to your inbox. Please verify your email before logging in.");
+        
+        const loginView = document.getElementById("login-view");
+        const signupView = document.getElementById("signup-view");
+        if (signupView) signupView.style.display = "none";
+        if (loginView) loginView.style.display = "block";
+
+    } catch (error) {
+        console.error("[Action Error] Email signup failed:", error);
+
+        let errorMsg = "Sign up error: " + error.message;
+        if (error.code === "auth/email-already-in-use") {
+            errorMsg = "An account with this email address already exists.";
+        } else if (error.code === "auth/invalid-email") {
+            errorMsg = "Please enter a valid email address.";
+        } else if (error.code === "auth/weak-password") {
+            errorMsg = "Your password is too weak. Please use at least 6 characters.";
+        }
+        alert(errorMsg);
+    } finally {
+        isHandlingSignup = false;
+    }
+}
+
+async function handleAnonymousLogin() {
+    console.log("[Action] Attempting Anonymous Sign-In...");
+    try {
+        localStorage.removeItem("guest_logged_out");
+
+        if (auth.currentUser && auth.currentUser.isAnonymous) {
+            console.log("%c[Action] Reusing active anonymous Firebase session.", "color: #2ecc71;");
+            if (authScreenEl) authScreenEl.style.display = "none";
+            if (webContainerEl) webContainerEl.style.display = "flex";
+            uid = auth.currentUser.uid;
+            window.uid = auth.currentUser.uid;
+            await checkBanStatus(uid);
+            await finishAppLoad();
+        } else {
+            console.log("%c[Action] Creating anonymous session via Firebase Auth.", "color: #2ecc71;");
+            await signInAnonymously(auth);
+        }
+    } catch (error) {
+        console.error("[Action Error] Anonymous sign-in failed:", error);
+        alert("Anonymous sign-in error: " + error.message);
+    }
+}
+
+async function handleLogout() {
+    const confirmLogout = confirm("Are you sure you want to log out? There's no going back.");
+    if (!confirmLogout) return;
+
+    console.log("[Action] Logout requested...");
+    try {
+        localStorage.removeItem("username");
+        await signOut(auth);
+        window.location.reload();
+    } catch (error) {
+        console.error("[Action Error] Logout failed:", error);
+        alert("Logout error: " + error.message);
+    }
+}
+
+function initAuthScreenUI() {
+    const loginView = document.getElementById("login-view");
+    const signupView = document.getElementById("signup-view");
+    const showSignupBtn = document.getElementById("show-signup-btn");
+    const showLoginBtn = document.getElementById("show-login-btn");
+    
+    const loginForm = document.getElementById("login-form");
+    const signupForm = document.getElementById("signup-form");
+    const anonymousBtn = document.getElementById("anonymous-continue-btn");
+
+    if (showSignupBtn) {
+        showSignupBtn.addEventListener("click", (e) => {
+            e.preventDefault();
+            loginView.style.display = "none";
+            signupView.style.display = "block";
+        });
+    }
+
+    if (showLoginBtn) {
+        showLoginBtn.addEventListener("click", (e) => {
+            e.preventDefault();
+            signupView.style.display = "none";
+            loginView.style.display = "block";
+        });
+    }
+
+    if (loginForm) {
+        loginForm.addEventListener("submit", (e) => {
+            e.preventDefault();
+            const email = document.getElementById("login-email").value;
+            const pass = document.getElementById("login-password").value;
+            handleEmailLogin(email, pass);
+        });
+    }
+
+    if (signupForm) {
+        signupForm.addEventListener("submit", (e) => {
+            e.preventDefault();
+            const email = document.getElementById("signup-email").value;
+            const usernameInput = document.getElementById("signup-username").value;
+            const pass = document.getElementById("signup-password").value;
+            handleEmailSignup(email, pass, usernameInput);
+        });
+    }
+
+    if (anonymousBtn) {
+        anonymousBtn.addEventListener("click", (e) => {
+            e.preventDefault();
+            handleAnonymousLogin();
+        });
+    }
+}
+
 
 // LOAD USER + SERVERS
 async function loadSavedUser(currentUid) {
@@ -262,62 +476,60 @@ async function loadSavedUser(currentUid) {
         profilePicEl.src = pfpSnap.val();
     }
 
-    const savedName = localStorage.getItem("username");
-
-    if (savedName) {
-        username = savedName;
-        usernameEl.textContent = username;
-        await set(ref(db, `users/${currentUid}/username`), username, writeOptions());
-        return false;
-    }
-
     const userRef = ref(db, `users/${currentUid}/username`);
     const snap = await get(userRef);
 
     if (snap.exists()) {
         username = snap.val();
         usernameEl.textContent = username;
-        localStorage.setItem("username", username);
+        localStorage.setItem(`username_${currentUid}`, username);
         return false;
     }
 
-    // Generate random username
+    const savedName = localStorage.getItem(`username_${currentUid}`);
+    if (savedName && auth.currentUser && auth.currentUser.isAnonymous) {
+        username = savedName;
+        usernameEl.textContent = username;
+        await set(ref(db, `users/${currentUid}/username`), username, writeOptions());
+        return false;
+    }
+
     const num = Math.floor(1000 + Math.random() * 9000); 
     username = `user${num}`;
     usernameEl.textContent = username;
+    localStorage.setItem(`username_${currentUid}`, username);
 
     return true;
 }
 
-async function loadSavedServers() {
-    const data = localStorage.getItem("myServers");
-    myServers = data ? JSON.parse(data) : [];
+async function loadUserServers() {
+    myServers = [];
+    if (serverListEl) serverListEl.innerHTML = "";
+    
+    const serversRef = ref(db, `users/${uid}/joinedServers`);
+    const snap = await get(serversRef);
 
-    const upgraded = [];
+    if (!snap.exists()) {
+        updateNoServersMessage();
+        return;
+    }
 
-    for (const server of myServers) {
-        const code = typeof server === "string" ? server : server.code;
-
+    const joinedObj = snap.val();
+    for (const code of Object.keys(joinedObj)) {
         if (code === "system") {
-            upgraded.push({ code: "system", name: "System" });
+            myServers.push({ code: "system", name: "System" });
             addServerToSidebar("system", "System");
             continue;
         }
 
-        const snap = await get(ref(db, `servers/${code}/name`));
-        let name = snap.exists() ? snap.val() : null;
+        const nameSnap = await get(ref(db, `servers/${code}/name`));
+        const name = nameSnap.exists() ? nameSnap.val() : `Server ${code}`;
 
-        if (!name) {
-            name = `Server ${code}`;
-            await set(ref(db, `servers/${code}/name`), name, writeOptions());
-        }
-
-        upgraded.push({ code, name });
+        myServers.push({ code, name });
         addServerToSidebar(code, name);
     }
 
-    myServers = upgraded;
-    localStorage.setItem("myServers", JSON.stringify(myServers));
+    updateNoServersMessage();
 }
 
 async function validateSavedServers() {
@@ -922,6 +1134,13 @@ function attachUIListeners() {
             pfpInput.value = "";
         });
     }
+
+    if (logoutBtnEl) {
+        logoutBtnEl.addEventListener("click", (e) => {
+            e.preventDefault();
+            handleLogout();
+        });
+    }
 }
 
 
@@ -942,7 +1161,7 @@ async function changeUsername() {
     if (usersSnap.exists()) {
         const users = usersSnap.val();
         for (const uidKey in users) {
-            if (users[uidKey].username === cleaned) {
+            if (users[uidKey].username && users[uidKey].username.toLowerCase() === cleaned.toLowerCase()) {
                 alert("Username already taken.");
                 return;
             }
@@ -1400,26 +1619,28 @@ async function createServer() {
     const name = prompt("Enter a name for your server:");
     if (!name) return;
     if (name.length > 24) { 
-        alert("Server name must be under 24 characters")
-        return
+        alert("Server name must be under 24 characters");
+        return;
     }
 
     const code = Math.random().toString(36).substring(2, 8);
 
+    // 1. Create server metadata & membership
     await set(ref(db, `servers/${code}`), {
         name,
         createdBy: uid,
         createdAt: Date.now()
     }, writeOptions());
 
-    if (uid) {
-        await set(ref(db, `servers/${code}/members/${uid}`), true, writeOptions());
-    }
+    await set(ref(db, `servers/${code}/members/${uid}`), true, writeOptions());
+
+    // 2. Save to user's joined servers list in Firebase
+    await set(ref(db, `users/${uid}/joinedServers/${code}`), true, writeOptions());
 
     addServerToSidebar(code, name);
     switchServer(code);
 
-    await sendBotMessage(code, `Server created. Your server code is: ${code}`)
+    await sendBotMessage(code, `Server created. Your server code is: ${code}`);
 }
 
 
@@ -1434,6 +1655,7 @@ async function joinServer() {
     }
 
     if (code === "system") {
+        await set(ref(db, `users/${uid}/joinedServers/system`), true, writeOptions());
         addServerToSidebar("system", "System");
         switchServer("system");
         return;
@@ -1454,9 +1676,14 @@ async function joinServer() {
     }
 
     let name = snapshot.val().name || `Server ${code}`;
-    await set(ref(db, `servers/${code}/members/${uid}`), true, writeOptions());
+    
+    // UPDATE BOTH PATHS:
+    await Promise.all([
+        set(ref(db, `servers/${code}/members/${uid}`), true, writeOptions()),
+        set(ref(db, `users/${uid}/joinedServers/${code}`), true, writeOptions())
+    ]);
 
-    await sendBotMessage(code, `👋 @${username} joined the server!`)
+    await sendBotMessage(code, `👋 @${username} joined the server!`);
 
     addServerToSidebar(code, name);
     switchServer(code);
@@ -1526,8 +1753,8 @@ async function leaveServer(code) {
     }
 
     if (code === "system") {
+        await remove(ref(db, `users/${uid}/joinedServers/system`), writeOptions());
         myServers = myServers.filter(s => s.code !== "system");
-        localStorage.setItem("myServers", JSON.stringify(myServers));
 
         const row = [...serverListEl.children].find(r => r.dataset.server === "system");
         if (row) row.remove();
@@ -1548,7 +1775,7 @@ async function leaveServer(code) {
         const serverData = serverSnap.exists() ? serverSnap.val() : null;
         isOwner = serverData && serverData.createdBy === uid;
     } catch (err) {
-        console.error("Failed to check server ownership for deletion:", err);
+        console.error("Failed to check server ownership:", err);
     }
 
     const actionText = isOwner ? "delete this server entirely" : "leave this server";
@@ -1557,27 +1784,18 @@ async function leaveServer(code) {
     if (isOwner) {
         await remove(ref(db, `servers/${code}`), writeOptions());
     } else {
-        await remove(ref(db, `servers/${code}/activeUsers/${uid}`), writeOptions());
-        await remove(ref(db, `servers/${code}/members/${uid}`), writeOptions());
+        // REMOVE FROM BOTH PATHS:
+        await Promise.all([
+            remove(ref(db, `servers/${code}/activeUsers/${uid}`), writeOptions()),
+            remove(ref(db, `servers/${code}/members/${uid}`), writeOptions()),
+            remove(ref(db, `users/${uid}/joinedServers/${code}`), writeOptions())
+        ]);
     }
 
     myServers = myServers.filter(s => s.code !== code);
-    localStorage.setItem("myServers", JSON.stringify(myServers));
 
     const row = [...serverListEl.children].find(r => r.dataset.server === code);
     if (row) row.remove();
-
-    const membersRef = ref(db, `servers/${code}/members`);
-    const membersSnap = await get(membersRef);
-    const members = membersSnap.exists() ? Object.keys(membersSnap.val()) : [];
-    const isLastMember = members.length === 0 || (members.length === 1 && members[0] === uid);
-
-    if (isLastMember) {
-        await remove(ref(db, `servers/${code}`), writeOptions());
-    } else {
-        await remove(ref(db, `servers/${code}/activeUsers/${uid}`), writeOptions());
-        await remove(ref(db, `servers/${code}/members/${uid}`), writeOptions());
-    }
 
     if (notificationUnsubs[code]) {
         notificationUnsubs[code]();
@@ -3413,7 +3631,10 @@ async function handleInvite() {
         const serverName = serverData.name || `Server ${joinCode}`;
 
         if (uid) {
-            await set(ref(db, `servers/${joinCode}/members/${uid}`), true, writeOptions());
+            await Promise.all([
+                set(ref(db, `servers/${joinCode}/members/${uid}`), true, writeOptions()),
+                set(ref(db, `users/${uid}/joinedServers/${joinCode}`), true, writeOptions())
+            ]);
         }
 
         await sendBotMessage(joinCode, `👋 @${username} joined the server!`);

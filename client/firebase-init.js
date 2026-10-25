@@ -52,14 +52,5 @@ export async function initAuthMode() {
         return;
     }
 
-    console.log("Running in FIREBASE AUTH MODE.");
-
-    onAuthStateChanged(auth, async (user) => {
-        if (!user) {
-            await signInAnonymously(auth);
-            return;
-        }
-
-        console.log("Firebase Auth UID:", user.uid);
-    });
+    console.log("Running in FIREBASE AUTH MODE");
 }

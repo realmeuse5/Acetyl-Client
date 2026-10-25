@@ -13,6 +13,65 @@
 </head>
 <body>
 
+    <div id="authScreen">
+        <div id="auth-card">
+            <img src="/client/Assets/wordmark.svg" alt="Acetyl Wordmark" class="auth-wordmark">
+        
+            <div id="login-view" class="auth-view">
+                <h1>Welcome back</h1>
+                <p>Signing in is completely optional btw</p>
+                
+                <form id="login-form" onsubmit="return false;">
+                    <div class="input-group">
+                        <label for="login-email">Email</label>
+                        <input type="email" id="login-email" required autocomplete="email">
+                    </div>
+
+                    <div class="input-group">
+                        <label for="login-password">Password</label>
+                        <input type="password" id="login-password" required autocomplete="current-password">
+                    </div>
+
+                    <button type="submit" id="login-submit-btn">Log In</button>
+                </form>
+
+                <div class="auth-switch-prompt">
+                    New here? <a href="#" id="show-signup-btn">Create an account</a>
+                </div>
+
+                <button id="anonymous-continue-btn">Continue Without Email<span>▶</span></button>
+            </div>
+
+            <div id="signup-view" class="auth-view" style="display: none;">
+                <h1>Create an account</h1>
+                
+                <form id="signup-form" onsubmit="return false;">
+                    <div class="input-group">
+                        <label for="signup-email">Email</label>
+                        <input type="email" id="signup-email" required autocomplete="email">
+                    </div>
+
+                    <div class="input-group">
+                        <label for="signup-username">Username</label>
+                        <input type="text" id="signup-username" required autocomplete="username">
+                    </div>
+
+                    <div class="input-group">
+                        <label for="signup-password">Password</label>
+                        <input type="password" id="signup-password" required autocomplete="new-password">
+                    </div>
+
+                    <button type="submit" id="signup-submit-btn">Sign Up</button>
+                </form>
+
+                <div class="auth-switch-prompt">
+                    Already have an account? <a href="#" id="show-login-btn">Log in</a>
+                </div>
+            </div>
+            
+        </div>
+    </div>
+
     <div id="header"> 
         <h1>Acetyl Client</h1>
         <div id="firebase"><img src="Assets/firebase.png" onclick="window.open('https://firebase.google.com')"></div>
