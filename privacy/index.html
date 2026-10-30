@@ -18,16 +18,17 @@
     <div id="content">
         <div id="title">
             <h1>Acetyl's Privacy Policy</h1>
-            <p>Last updated: August 2026</p>
+            <p>Last updated: 29 October 2026</p>
         </div>
 
         <div class="section">
             <p>This Privacy Policy explains how Acetyl (“the Service”) collects, uses, and safeguards information when you use our chat client. By accessing or using the Service, you agree to the data practices described in this policy.</p>
             <h2>1. Information We Collect</h2>
-            <p><strong>Account & Session Identifiers.</strong> When you access the Service, authentication generates or assigns a unique User Identifier (UID). Depending on your connection mode, this UID is either managed via Firebase Authentication or assigned locally. Your chosen or auto-generated username is stored in our database and linked to your UID.</p>
-            <p><strong>User Messages & Uploaded Assets.</strong> Messages, direct messages (DMs), and file attachments transmitted across servers are processed and stored in our Firebase Realtime Database. Files and images uploaded using the client attachment tool are stored on our dedicated media server.</p>
-            <p><strong>Moderation & Ban Logs.</strong> If an account is suspended or banned, we record administrative audit data—including your assigned UID, username, ban reason, duration, timestamp, and reviewing administrator—to enforce access restrictions and maintain platform security.</p>
-            <p><strong>Local Client Storage.</strong> We utilize browser local storage to retain your active server subscriptions, read-state timestamps, local session flags, and username settings across page refreshes.</p>
+            <p><strong>Account & Profile Details.</strong> When you create an account or sign in, we assign a unique User Identifier (UID). We collect your username, profile picture, and authentication credentials (such as your email address if you register with email, or guest session tokens).</p>
+            <p><strong>Messages & Media.</strong> Text messages, direct messages (DMs), custom server conversations, and file attachments transmitted across channels are stored to deliver them to recipients.</p>
+            <p><strong>Voice Call Data.</strong> When participating in voice channels, temporary connection tokens are processed to establish real-time audio calls directly between participants. Audio calls are not recorded or stored on our servers.</p>
+            <p><strong>Moderation Logs.</strong> If an account is issued a warning, muted, kicked, or banned, we retain record logs—including your UID, username, reason, duration, and timestamp—to enforce safety policies and prevent ban evasion.</p>
+            <p><strong>Browser Local Storage.</strong> We store non-sensitive preferences directly on your device, such as your server list or UI display settings.</p>
         </div>
         <div class="section">
             <h2>2. How We Use Information</h2>
@@ -44,8 +45,10 @@
         <div class="section">
             <h2>4. Data Retention & Automatic Deletion</h2>
             <p><strong>Message Rotation & Deletion.</strong> To maintain server performance and database optimization, channels enforce message capacity limits. When a channel exceeds its message limit, older messages and associated media files on the file server are subject to automatic, permanent deletion.</p>
+            <p><strong>Manual Deletion.</strong> Server administrators, channel owners, or individual users may delete messages at any time.</p>
+            <p><strong>Profile Picture Updates.</strong> When you replace or update your profile picture, the previous avatar file is permanently removed from the media storage server.</p>
             <p><strong>Ban Records.</strong> Moderation audit records are retained for the duration of an active ban and may persist in administrative security logs to prevent ban evasion.</p>
-            <p><strong>Local Storage Clearing.</strong> You may clear your browser’s local storage or application data at any time to remove locally cached server lists and session state from your device.</p>
+            <p><strong>Device Storage.</strong> You can clear your browser storage at any time to remove saved preferences and local session caches from your device.</p>
         </div>
         <div class="section">
             <h2>5. Security & Your Rights</h2>

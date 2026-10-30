@@ -97,7 +97,7 @@ a {
     left: 50%;              
     transform: translate(-50%, -50%); 
     background-color: #222327;  
-    border-radius: 8px;
+    border-radius: 10px;
     width: 40%;
     padding: 0;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
@@ -1037,9 +1037,9 @@ a {
     position: fixed;
     z-index: 1000;
     background: #121214;
-    border-radius: 6px;
+    border-radius: 10px;
     padding: 6px;
-    min-width: 150px;
+    min-width: 180px;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
     transform-origin: top center;
     animation: 0.1s ease-out pop;
@@ -1086,7 +1086,7 @@ a {
     font-size: 14px;
     color: #ffffff;
     cursor: pointer;
-    border-radius: 4px;
+    border-radius: 6px;
     font-family: 'DM Sans', sans-serif;
 }
 
@@ -1095,10 +1095,37 @@ a {
     color: #ffffff;
 }
 
-.context-menu li.disabled {
-    opacity: 0.5;
-    cursor: default;
-    background-color: transparent;
+#msgContextQuickActions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #29292d;
+    margin-bottom: 5px;
+    gap: 5px;
+}
+
+#msgContextQuickActions button {
+    background: #1c1c21;
+    border-radius: 6px;
+    cursor: pointer;
+    color: #fff;
+    padding: 5px 10px;
+    border: none;
+    font-weight: 500;
+    font-size: 15px;
+    width: 48%;
+}
+
+#msgContextQuickActions button:hover {
+    background: #29292d;
+}
+
+.context-menu hr {
+    border: none;
+    border-top: 1px solid #29292d;
+    margin: 6px 0;
 }
 
 /* RIGHT SIDEBAR */

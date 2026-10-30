@@ -61,116 +61,128 @@ let isHandlingSignup = false;
 
 
 // UI ELEMENTS
-let messagesListEl;
-let messageInputEl;
-let usernameEl;
-let adminBtnEl;
-let serverListEl;
-let noServersMsgEl;
-let fileInputEl;
-let attachBtnEl;
-let attachedFileLabelEl;
-let publicServerBtnEl;
-let createServerBtnEl;
-let joinServerBtnEl;
+let authScreenEl;
+let loadingScreenEl;
 let bannedEl;
 let bannedMsgEl;
 let webContainerEl;
-let guidelinesBtnEl;
-let chatContainerEl;
-let guidelinesContainerEl;
-let messageBarEl
-let guidelinesEl;
+let systemContainerEl;
+let usernameEl;
+let profilePicEl;
+let adminBtnEl;
+let logoutBtnEl;
+let serverListEl;
+let noServersMsgEl;
+let publicServerBtnEl;
 let announcementsBtnEl;
-let contextMenuEl;
-let contextLeaveBtnEl
+let createServerBtnEl;
+let joinServerBtnEl;
+let guidelinesBtnEl;
+let guidelinesContainerEl;
+let guidelinesEl;
+let chatContainerEl;
+let messagesListEl;
+let messageBarEl;
+let messageInputEl;
+let fileInputEl;
+let attachBtnEl;
+let attachedFileLabelEl;
+let chatHeaderNameEl;
+let headerReadOnlyBtnEl;
+let headerVoicechatBtnEl;
+let headerMembersBtnEl;
 let rightSidebarEl;
 let closeRightSidebarBtnEl;
 let activeMembersListEl;
 let allMembersListEl;
 let allMembersHeaderEl;
+let kickedMembersHeaderEl;
+let kickedMembersListEl;
+let voiceContainerEl;
+let voiceHeaderNameEl;
+let voiceBackBtnEl;
+let voiceMuteBtnEl;
+let contextMenuEl;
+let contextLeaveBtnEl;
 let contextInviteBtnEl;
 let contextKickBtnEl;
-let newMessage;
 let messageContextMenu;
+let msgContextQuickActions;
+let msgContextDivider;
+let msgContextDivider1;
+let msgIconMute;
+let msgIconKick;
+let msgIconBan;
+let msgContextCopy;
+let msgContextDm;
+let msgContextReport;
 let msgContextGetUid;
-let msgContextBan;
 let msgContextDelete;
-let msgContextKick;
-let kickedMembersHeaderEl
-let kickedMembersListEl
-let voiceContainerEl
-let voiceBackBtnEl
-let voiceMuteBtnEl
-let systemContainerEl;
-let msgContextMuteBtnEl;
-let loadingScreenEl;
-let headerReadOnlyBtnEl;
-let headerVoicechatBtnEl;
-let headerMembersBtnEl;
-let chatHeaderNameEl;
-let profilePicEl;
-let voiceHeaderNameEl;
-let authScreenEl;
-let logoutBtnEl;
+let newMessage;
 
 function writeOptions() { return { auth: { uid } }; }
 
 
 // ONLOAD
 window.onload = async () => {
-    messagesListEl = document.getElementById("messages");
-    messageInputEl = document.getElementById("messageInput");
-    usernameEl = document.getElementById("username");
-    adminBtnEl = document.getElementById("adminBtn");
-    serverListEl = document.getElementById("serverList");
-    noServersMsgEl = document.getElementById("noServersMsg");
-    fileInputEl = document.getElementById("fileInput");
-    attachBtnEl = document.getElementById("attachBtn");
-    publicServerBtnEl = document.getElementById("publicServerBtn");
-    createServerBtnEl = document.getElementById("createServerBtn");
-    joinServerBtnEl = document.getElementById("joinServerBtn");
-    attachedFileLabelEl = document.getElementById("attachedFileLabel");
+    authScreenEl = document.getElementById("authScreen");
+    loadingScreenEl = document.getElementById("loadingScreen");
     bannedEl = document.getElementById("banned");
     bannedMsgEl = document.getElementById("bannedMsg");
     webContainerEl = document.getElementById("webContainer");
+    systemContainerEl = document.getElementById("systemContainer");
+    usernameEl = document.getElementById("username");
+    profilePicEl = document.getElementById("profilePicture");
+    adminBtnEl = document.getElementById("adminBtn");
+    logoutBtnEl = document.getElementById("logOut");
+    serverListEl = document.getElementById("serverList");
+    noServersMsgEl = document.getElementById("noServersMsg");
+    publicServerBtnEl = document.getElementById("publicServerBtn");
+    announcementsBtnEl = document.getElementById("announcementsBtn");
+    createServerBtnEl = document.getElementById("createServerBtn");
+    joinServerBtnEl = document.getElementById("joinServerBtn");
     guidelinesBtnEl = document.getElementById("guidelinesBtn");
-    chatContainerEl = document.getElementById("chatContainer");
     guidelinesContainerEl = document.getElementById("guidelinesContainer");
     guidelinesEl = document.getElementById("guidelines");
+    chatContainerEl = document.getElementById("chatContainer");
+    messagesListEl = document.getElementById("messages");
     messageBarEl = document.getElementById("messageBar");
-    announcementsBtnEl = document.getElementById("announcementsBtn");
-    contextMenuEl = document.getElementById("serverContextMenu");
-    contextLeaveBtnEl = document.getElementById("contextLeaveServer");
+    messageInputEl = document.getElementById("messageInput");
+    fileInputEl = document.getElementById("fileInput");
+    attachBtnEl = document.getElementById("attachBtn");
+    attachedFileLabelEl = document.getElementById("attachedFileLabel");
+    chatHeaderNameEl = document.getElementById("chatHeaderName");
+    headerReadOnlyBtnEl = document.getElementById("headerReadOnly");
+    headerVoicechatBtnEl = document.getElementById("headerVoicechatBtn");
+    headerMembersBtnEl = document.getElementById("headerMembersBtn");
     rightSidebarEl = document.getElementById("rightSidebar");
     closeRightSidebarBtnEl = document.getElementById("closeRightSidebar");
     activeMembersListEl = document.getElementById("activeMembersList");
     allMembersListEl = document.getElementById("allMembersList");
     allMembersHeaderEl = document.getElementById("allMembersHeader");
-    contextInviteBtnEl = document.getElementById("contextInvite");
-    contextKickBtnEl = document.getElementById("contextKick");
-    newMessage = new Audio('/client/Assets/newMessage.mp3')
-    messageContextMenu = document.getElementById("messageContextMenu");
-    msgContextGetUid = document.getElementById("msgContextGetUid");
-    msgContextBan = document.getElementById("msgContextBan");
-    msgContextDelete = document.getElementById("msgContextDelete");
-    msgContextKick = document.getElementById("msgContextKick");
     kickedMembersHeaderEl = document.getElementById("kickedMembersHeader");
     kickedMembersListEl = document.getElementById("kickedMembersList");
-    voiceContainerEl = document.getElementById("voice-container")
+    voiceContainerEl = document.getElementById("voice-container");
+    voiceHeaderNameEl = document.getElementById("voiceHeaderName");
     voiceBackBtnEl = document.getElementById("voiceBackBtn");
     voiceMuteBtnEl = document.getElementById("voiceMuteBtn");
-    systemContainerEl = document.getElementById("systemContainer")
-    msgContextMuteBtnEl = document.getElementById("msgContextMute");
-    loadingScreenEl = document.getElementById("loadingScreen");
-    headerReadOnlyBtnEl = document.getElementById("headerReadOnly");
-    headerVoicechatBtnEl = document.getElementById("headerVoicechatBtn");
-    headerMembersBtnEl = document.getElementById("headerMembersBtn");
-    chatHeaderNameEl = document.getElementById("chatHeaderName");
-    profilePicEl = document.getElementById("profilePicture")
-    voiceHeaderNameEl = document.getElementById("voiceHeaderName")
-    authScreenEl = document.getElementById("authScreen");
-    logoutBtnEl = document.getElementById("logOut");
+    contextMenuEl = document.getElementById("serverContextMenu");
+    contextLeaveBtnEl = document.getElementById("contextLeaveServer");
+    contextInviteBtnEl = document.getElementById("contextInvite");
+    contextKickBtnEl = document.getElementById("contextKick");
+    messageContextMenu = document.getElementById("messageContextMenu");
+    msgContextQuickActions = document.getElementById("msgContextQuickActions");
+    msgContextDivider = document.getElementById("msgContextDivider");
+    msgContextDivider1 = document.getElementById("msgContextDivider1");
+    msgIconMute = document.getElementById("msgIconMute");
+    msgIconKick = document.getElementById("msgIconKick");
+    msgIconBan = document.getElementById("msgIconBan");
+    msgContextCopy = document.getElementById("msgContextCopy");
+    msgContextDm = document.getElementById("msgContextDm");
+    msgContextReport = document.getElementById("msgContextReport");
+    msgContextGetUid = document.getElementById("msgContextGetUid");
+    msgContextDelete = document.getElementById("msgContextDelete");
+    newMessage = new Audio('/client/Assets/newMessage.mp3');
 
     await initAuthMode();
     initSettingsUI();
@@ -582,14 +594,432 @@ async function validateSavedServers() {
 // UI EVENT LISTENERS
 function attachUIListeners() {
     publicServerBtnEl.addEventListener("click", () => switchServer("public"));
+    announcementsBtnEl.addEventListener("click", () => switchServer("announcements"));
     createServerBtnEl.addEventListener("click", createServer);
     joinServerBtnEl.addEventListener("click", joinServer);
+    guidelinesBtnEl.addEventListener("click", () => switchView("guidelines"));
     usernameEl.addEventListener("click", changeUsername);
-    announcementsBtnEl.addEventListener("click", () => switchServer("announcements"));
+
+    if (logoutBtnEl) {
+        logoutBtnEl.addEventListener("click", (e) => {
+            e.preventDefault();
+            handleLogout();
+        });
+    }
+
+    if (profilePicEl) {
+        const pfpInput = document.createElement("input");
+        pfpInput.type = "file";
+        pfpInput.accept = "image/*";
+        pfpInput.style.display = "none";
+        document.body.appendChild(pfpInput);
+
+        profilePicEl.style.cursor = "pointer";
+        profilePicEl.title = "Change profile picture";
+
+        profilePicEl.addEventListener("click", () => {
+            pfpInput.click();
+        });
+
+        pfpInput.addEventListener("change", (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                handlePfpUpload(file);
+            }
+            pfpInput.value = "";
+        });
+    }
+
+    messageInputEl.addEventListener("keydown", async (e) => {
+        if (!messageInputEl.hasAttribute("contenteditable") || messageInputEl.classList.contains("disabled")) {
+            e.preventDefault();
+            return;
+        }
+
+        if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault(); 
+
+            if (currentServer === "announcements") {
+                if (!isAdmin) return;
+                await postAnnouncement();
+                return;
+            }
+
+            await sendMessage();
+        }
+    });
+
+    messageInputEl.addEventListener("blur", () => {
+        if (!messageInputEl.innerText.trim()) messageInputEl.innerHTML = ""
+    });
+
+    messageInputEl.addEventListener("input", () => {
+        if (!messageInputEl.innerText.trim()) {
+            messageInputEl.innerHTML = "";
+            return;
+        }
+
+        const text = messageInputEl.innerText;
+        const atIndex = text.indexOf("@");
+        const commaIndex = text.indexOf(",");
+
+        if (atIndex !== -1 && commaIndex > atIndex) {
+            const beforeMention = text.substring(0, atIndex);
+            const mentionPart = text.substring(atIndex, commaIndex + 1);
+            const restOfText = text.substring(commaIndex + 1);
+
+            messageInputEl.innerHTML = `${beforeMention}<span class="input-mention" contenteditable="false">${mentionPart}</span>${restOfText}`;
+
+            const range = document.createRange();
+            const selection = window.getSelection();
+            range.selectNodeContents(messageInputEl);
+            range.collapse(false);
+            selection.removeAllRanges();
+            selection.addRange(range);
+        }
+    });
+
+    attachBtnEl.addEventListener("click", () => fileInputEl.click());
+
+    fileInputEl.addEventListener("change", () => {
+        const file = fileInputEl.files[0];
+        handleFileSelection(file);
+    });
+
+    messageInputEl.addEventListener("paste", (e) => {
+        const clipboardData = e.clipboardData || window.clipboardData;
+        if (!clipboardData || !clipboardData.files) return;
+
+        if (clipboardData.files.length > 0) {
+            const file = clipboardData.files[0];
+            e.preventDefault();
+            handleFileSelection(file);
+        }
+    });
+
+    ["dragenter", "dragover", "dragleave", "drop"].forEach((eventName) => {
+        webContainerEl.addEventListener(eventName, (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+        });
+    });
+
+    webContainerEl.addEventListener("dragover", () => {
+        webContainerEl.classList.add("drag-over");
+    });
+
+    ["dragleave", "drop"].forEach((eventName) => {
+        webContainerEl.addEventListener(eventName, () => {
+            webContainerEl.classList.remove("drag-over");
+        });
+    });
+
+    webContainerEl.addEventListener("drop", (e) => {
+        const dt = e.dataTransfer;
+        if (dt && dt.files && dt.files.length > 0) {
+            const file = dt.files[0];
+            handleFileSelection(file);
+        }
+    });
+
+    if (headerMembersBtnEl) {
+        headerMembersBtnEl.addEventListener("click", () => {
+            if (!rightSidebarEl) return;
+            const isHidden = getComputedStyle(rightSidebarEl).display === "none";
+            if (isHidden) {
+                rightSidebarEl.style.display = "flex";
+                headerMembersBtnEl.classList.add("active");
+                setupActiveUserListener(currentServer);
+                loadAllMembers(currentServer);
+            } else {
+                rightSidebarEl.style.display = "none";
+                headerMembersBtnEl.classList.remove("active");
+            }
+        });
+    }
+
+    if (closeRightSidebarBtnEl) {
+        closeRightSidebarBtnEl.addEventListener('click', () => {
+            rightSidebarEl.style.display = 'none';
+            if (headerMembersBtnEl) headerMembersBtnEl.classList.remove("active");
+        });
+    }
+
+    if (headerReadOnlyBtnEl) {
+        headerReadOnlyBtnEl.addEventListener("click", async () => {
+            if (!currentServer || currentServer === "public" || currentServer === "announcements") return;
+            try {
+                const serverRef = ref(db, `servers/${currentServer}`);
+                const snap = await get(serverRef);
+                if (!snap.exists()) return;
+
+                const serverData = snap.val();
+                if (serverData.createdBy !== uid) return;
+
+                const newReadOnly = !serverData.readOnly;
+                await set(ref(db, `servers/${currentServer}/readOnly`), newReadOnly, writeOptions());
+                headerReadOnlyBtnEl.textContent = `Read-Only Mode: ${newReadOnly ? "On" : "Off"}`;
+                
+                const botMessageText = newReadOnly 
+                    ? "🔒 Server Read-Only mode is now ON. Only the owner can send messages."
+                    : "🔓 Server Read-Only mode is now OFF. Everyone can send messages again.";
+
+                await sendBotMessage(currentServer, botMessageText, null, true);
+            } catch (err) {
+                console.error("Failed to toggle read-only:", err);
+            }
+        });
+    }
+
+    if (headerVoicechatBtnEl) {
+        headerVoicechatBtnEl.addEventListener("click", () => {
+            if (currentServer && currentServer !== "public" && currentServer !== "announcements") {
+                joinVoiceChat(currentServer);
+            }
+        });
+    }
+
+    if (voiceBackBtnEl) {
+        voiceBackBtnEl.addEventListener("click", () => leaveVoiceChat());
+    }
+
+    if (voiceMuteBtnEl) {
+        voiceMuteBtnEl.addEventListener("click", async () => {
+            if (!localAudioStream) return;
+
+            vcMuted = !vcMuted;
+
+            localAudioStream.getAudioTracks().forEach(track => {
+                track.enabled = !vcMuted;
+            });
+
+            const iconEl = voiceMuteBtnEl.querySelector("i");
+            if (vcMuted) {
+                iconEl.className = "fa-solid fa-microphone-slash";
+                voiceMuteBtnEl.classList.add("muted");
+                voiceMuteBtnEl.title = 'Unmute'
+            } else {
+                iconEl.className = "fa-solid fa-microphone";
+                voiceMuteBtnEl.classList.remove("muted");
+                voiceMuteBtnEl.title = 'Mute'
+            }
+
+            if (currentVoiceServer && uid) {
+                const voiceUserRef = ref(db, `servers/${currentVoiceServer}/voice/${uid}`);
+                await set(voiceUserRef, {
+                    username: username || "Anonymous",
+                    joinedAt: serverTimestamp(),
+                    vcMuted: vcMuted,
+                    msgKey: currentVoiceMsgKey
+                });
+            }
+        });
+    }
+
+    document.addEventListener("click", hideContextMenu);
+    document.addEventListener("scroll", hideContextMenu, true);
+
+    if (contextLeaveBtnEl) {
+        contextLeaveBtnEl.addEventListener("click", (e) => {
+            e.stopPropagation(); 
+            if (contextMenuTargetServer) {
+                leaveServer(contextMenuTargetServer);
+            }
+            hideContextMenu();
+        });
+    }
+
+    if (contextInviteBtnEl) {
+        contextInviteBtnEl.addEventListener("click", (e) => {
+            e.stopPropagation();
+            if (contextMenuTargetServer) {
+                const inviteUrl = `${window.location.origin}/invite/${contextMenuTargetServer}`;
+                alert(`Server Code: ${contextMenuTargetServer}\n\nOr use this invite link:\n${inviteUrl}`);
+            }
+            hideContextMenu();
+        });
+    }
+
+    if (contextKickBtnEl) {
+        contextKickBtnEl.addEventListener("click", async (e) => {
+            e.stopPropagation();
+
+            if (contextKickBtnEl.classList.contains("disabled")) {
+                e.preventDefault();
+                return;
+            }
+
+            const targetServerId = contextMenuTargetServer;
+            hideContextMenu();
+
+            if (!targetServerId) return;
+
+            const targetUser = prompt("Enter username to kick:");
+            if (!targetUser) return;
+
+            const targetName = targetUser.trim();
+
+            try {
+                const usersSnap = await get(ref(db, "users"));
+                let targetUid = null;
+
+                if (usersSnap.exists()) {
+                    const users = usersSnap.val();
+                    for (const uidKey in users) {
+                        if (users[uidKey].username === targetName) {
+                            targetUid = uidKey;
+                            break;
+                        }
+                    }
+                }
+
+                if (!targetUid) {
+                    alert(`User @${targetName} was not found.`);
+                    return;
+                }
+
+                await toggleKickUser(targetServerId, targetUid, targetName);
+            } catch (err) {
+                console.error("Kick/unkick toggle failed:", err);
+            }
+        });
+    }
+
+    if (msgContextCopy) {
+        msgContextCopy.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            if (!targetContextMenuMsg || !targetContextMenuMsg.text) return;
+            const textToCopy = targetContextMenuMsg.text;
+            hideContextMenu();
+            try {
+                await navigator.clipboard.writeText(textToCopy);
+            } catch (err) {
+                console.error("Failed to copy text:", err);
+            }
+        });
+    }
+
+    if (msgContextDm) {
+        msgContextDm.addEventListener("click", (e) => {
+            e.stopPropagation();
+            if (!targetContextMenuMsg) return;
+
+            const targetUser = targetContextMenuMsg.username || userCache[targetContextMenuMsg.uid]?.username || "User";
+            hideContextMenu();
+            
+            if (messageInputEl) {
+                messageInputEl.innerHTML = `<span class="input-mention" contenteditable="false">@${targetUser},</span>&nbsp;`;
+                messageInputEl.focus();
+                const range = document.createRange();
+                const selection = window.getSelection();
+                range.selectNodeContents(messageInputEl);
+                range.collapse(false);
+                selection.removeAllRanges();
+                selection.addRange(range);
+            }
+        });
+    }
+
+    if (msgContextDm) {
+        msgContextDm.addEventListener("click", (e) => {
+            e.stopPropagation();
+            if (!targetContextMenuMsg) return;
+            const targetUser = targetContextMenuMsg.username || userCache[targetContextMenuMsg.uid]?.username || "User";
+            hideContextMenu();
+            
+            if (messageInputEl) {
+                messageInputEl.innerHTML = `<span class="input-mention" contenteditable="false">@${targetUser},</span>&nbsp;`;
+                messageInputEl.focus();
+                const range = document.createRange();
+                const selection = window.getSelection();
+                range.selectNodeContents(messageInputEl);
+                range.collapse(false);
+                selection.removeAllRanges();
+                selection.addRange(range);
+            }
+        });
+    }
+
+    if (msgContextReport) {
+        msgContextReport.addEventListener("click", (e) => {
+            e.stopPropagation();
+            if (!targetContextMenuMsg) return;
+            const targetUid = targetContextMenuMsg.uid;
+            const targetUser = targetContextMenuMsg.username || userCache[targetUid]?.username || "Unknown User";
+            const msgId = targetContextMenuMsg.id || "N/A";
+            hideContextMenu();
+
+            const subject = encodeURIComponent(`Report a User`);
+            const body = encodeURIComponent(
+                `Hello Acetyl Support,\n\nI would like to report the user @${targetUser} for violating community guidelines.\n\nUID: ${targetUid}\nMessage ID: ${msgId}`
+            );
+            window.location.href = `mailto:support@acetyl.cc?subject=${subject}&body=${body}`;
+        });
+    }
+
+    if (msgContextGetUid) {
+        msgContextGetUid.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            if (!targetContextMenuMsg) {
+                hideContextMenu();
+                return;
+            }
+            const targetUid = targetContextMenuMsg.uid;
+            hideContextMenu();
+
+            await navigator.clipboard.writeText(targetUid);
+        });
+    }
+
+    if (msgContextDelete) {
+        msgContextDelete.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            if (!targetContextMenuMsg || !targetContextMenuMsg.id) {
+                hideContextMenu();
+                return;
+            }
+
+            const targetMsg = targetContextMenuMsg;
+            const isMyMessage = targetMsg.uid === uid;
+
+            let canModerate = isAdmin;
+            if (!canModerate && currentServer !== "public" && currentServer !== "announcements") {
+                try {
+                    const serverSnap = await get(ref(db, `servers/${currentServer}`));
+                    const serverData = serverSnap.exists() ? serverSnap.val() : null;
+                    if (serverData && serverData.createdBy === uid) {
+                        canModerate = true;
+                    }
+                } catch (err) {
+                    console.error("Permission check failed:", err);
+                }
+            }
+
+            if (!canModerate && !isMyMessage) {
+                alert("You can only delete your own messages.");
+                hideContextMenu();
+                return;
+            }
+
+            hideContextMenu();
+
+            if (targetMsg.fileUrl) {
+                const filename = targetMsg.fileUrl.split("/").pop();
+                const deleteUrl = `${UPLOAD_URL.replace("/upload", "")}/delete-file?name=${filename}`;
+                fetch(deleteUrl, { method: "DELETE" }).catch(err => console.error("File removal failed:", err));
+            }
+
+            await remove(ref(db, `servers/${currentServer}/messages/${targetMsg.id}`), writeOptions());
+        });
+    }
+
+    if (msgIconMute) msgIconMute.addEventListener("click", handleMuteAction);
+    if (msgIconKick) msgIconKick.addEventListener("click", handleKickAction);
+    if (msgIconBan) msgIconBan.addEventListener("click", handleBanAction);
 
     adminBtnEl.addEventListener("click", async () => {
-        const isAdmin = await get(ref(db, `admins/${uid}`));
-        if (!isAdmin.exists()) {
+        const isAdminCheck = await get(ref(db, `admins/${uid}`));
+        if (!isAdminCheck.exists()) {
             alert("You are not an admin.");
             return;
         }
@@ -730,421 +1160,6 @@ function attachUIListeners() {
                 alert("Invalid command.");
         }
     });
-
-    messageInputEl.addEventListener("keydown", async (e) => {
-        if (!messageInputEl.hasAttribute("contenteditable") || messageInputEl.classList.contains("disabled")) {
-            e.preventDefault();
-            return;
-        }
-
-        if (e.key === "Enter" && !e.shiftKey) {
-            e.preventDefault(); 
-
-            if (currentServer === "announcements") {
-                if (!isAdmin) return;
-                await postAnnouncement();
-                return;
-            }
-
-            await sendMessage();
-        }
-    });
-
-    messageInputEl.addEventListener("blur", () => {
-        if (!messageInputEl.innerText.trim()) messageInputEl.innerHTML = ""
-    });
-
-    messageInputEl.addEventListener("input", () => {
-        if (!messageInputEl.innerText.trim()) {
-            messageInputEl.innerHTML = "";
-            return;
-        }
-
-        const text = messageInputEl.innerText;
-        const atIndex = text.indexOf("@");
-        const commaIndex = text.indexOf(",");
-
-        if (atIndex !== -1 && commaIndex > atIndex) {
-            const beforeMention = text.substring(0, atIndex);
-            const mentionPart = text.substring(atIndex, commaIndex + 1);
-            const restOfText = text.substring(commaIndex + 1);
-
-            messageInputEl.innerHTML = `${beforeMention}<span class="input-mention" contenteditable="false">${mentionPart}</span>${restOfText}`;
-
-            const range = document.createRange();
-            const selection = window.getSelection();
-            range.selectNodeContents(messageInputEl);
-            range.collapse(false);
-            selection.removeAllRanges();
-            selection.addRange(range);
-        }
-    });
-
-    attachBtnEl.addEventListener("click", () => fileInputEl.click());
-
-    fileInputEl.addEventListener("change", () => {
-        const file = fileInputEl.files[0];
-        handleFileSelection(file);
-    });
-
-    messageInputEl.addEventListener("paste", (e) => {
-        const clipboardData = e.clipboardData || window.clipboardData;
-        if (!clipboardData || !clipboardData.files) return;
-
-        if (clipboardData.files.length > 0) {
-            const file = clipboardData.files[0];
-            
-            e.preventDefault();
-            
-            handleFileSelection(file);
-        }
-    });
-
-    ["dragenter", "dragover", "dragleave", "drop"].forEach((eventName) => {
-        webContainerEl.addEventListener(eventName, (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-        });
-    });
-
-    webContainerEl.addEventListener("dragover", () => {
-        webContainerEl.classList.add("drag-over");
-    });
-
-    ["dragleave", "drop"].forEach((eventName) => {
-        webContainerEl.addEventListener(eventName, () => {
-            webContainerEl.classList.remove("drag-over");
-        });
-    });
-
-    webContainerEl.addEventListener("drop", (e) => {
-        const dt = e.dataTransfer;
-        if (dt && dt.files && dt.files.length > 0) {
-            const file = dt.files[0];
-            handleFileSelection(file);
-        }
-    });
-
-    guidelinesBtnEl.addEventListener("click", () => {
-        switchView("guidelines");
-    });
-
-    document.addEventListener("click", hideContextMenu);
-    document.addEventListener("scroll", hideContextMenu, true);
-
-    if (contextLeaveBtnEl) {
-        contextLeaveBtnEl.addEventListener("click", (e) => {
-            e.stopPropagation(); 
-            if (contextMenuTargetServer) {
-                leaveServer(contextMenuTargetServer);
-            }
-            hideContextMenu();
-        });
-    }
-
-    if (headerMembersBtnEl) {
-        headerMembersBtnEl.addEventListener("click", () => {
-            if (!rightSidebarEl) return;
-            const isHidden = getComputedStyle(rightSidebarEl).display === "none";
-            if (isHidden) {
-                rightSidebarEl.style.display = "flex";
-                headerMembersBtnEl.classList.add("active");
-                setupActiveUserListener(currentServer);
-                loadAllMembers(currentServer);
-            } else {
-                rightSidebarEl.style.display = "none";
-                headerMembersBtnEl.classList.remove("active");
-            }
-        });
-    }
-
-    if (closeRightSidebarBtnEl) {
-        closeRightSidebarBtnEl.addEventListener('click', () => {
-            rightSidebarEl.style.display = 'none';
-            if (headerMembersBtnEl) headerMembersBtnEl.classList.remove("active");
-        });
-    }
-
-    if (contextInviteBtnEl) {
-        contextInviteBtnEl.addEventListener("click", (e) => {
-            e.stopPropagation();
-            if (contextMenuTargetServer) {
-                const inviteUrl = `${window.location.origin}/invite/${contextMenuTargetServer}`;
-                alert(`Server Code: ${contextMenuTargetServer}\n\nOr use this invite link:\n${inviteUrl}`);
-            }
-            hideContextMenu();
-        });
-    }
-
-    if (contextKickBtnEl) {
-        contextKickBtnEl.addEventListener("click", async (e) => {
-            e.stopPropagation();
-
-            if (contextKickBtnEl.classList.contains("disabled")) {
-                e.preventDefault();
-                return;
-            }
-
-            const targetServerId = contextMenuTargetServer;
-            hideContextMenu();
-
-            if (!targetServerId) {
-                return;
-            }
-
-            const targetUser = prompt("Enter username to kick:");
-            if (!targetUser) return;
-
-            const targetName = targetUser.trim();
-
-            try {
-                const usersSnap = await get(ref(db, "users"));
-                let targetUid = null;
-
-                if (usersSnap.exists()) {
-                    const users = usersSnap.val();
-                    for (const uidKey in users) {
-                        if (users[uidKey].username === targetName) {
-                            targetUid = uidKey;
-                            break;
-                        }
-                    }
-                }
-
-                if (!targetUid) {
-                    alert(`User @${targetName} was not found.`);
-                    return;
-                }
-
-                await toggleKickUser(targetServerId, targetUid, targetName);
-            } catch (err) {
-                console.error("Kick/unkick toggle failed:", err);
-            }
-        });
-    }
-
-    if (headerReadOnlyBtnEl) {
-        headerReadOnlyBtnEl.addEventListener("click", async () => {
-            if (!currentServer || currentServer === "public" || currentServer === "announcements") return;
-            try {
-                const serverRef = ref(db, `servers/${currentServer}`);
-                const snap = await get(serverRef);
-                if (!snap.exists()) return;
-
-                const serverData = snap.val();
-                if (serverData.createdBy !== uid) return;
-
-                const newReadOnly = !serverData.readOnly;
-                await set(ref(db, `servers/${currentServer}/readOnly`), newReadOnly, writeOptions());
-                headerReadOnlyBtnEl.textContent = `Read-Only Mode: ${newReadOnly ? "On" : "Off"}`;
-                
-                const botMessageText = newReadOnly 
-                    ? "🔒 Server Read-Only mode is now ON. Only the owner can send messages."
-                    : "🔓 Server Read-Only mode is now OFF. Everyone can send messages again.";
-
-                await sendBotMessage(currentServer, botMessageText, null, true);
-            } catch (err) {
-                console.error("Failed to toggle read-only:", err);
-            }
-        });
-    }
-
-    msgContextGetUid.addEventListener("click", async (e) => {
-        e.stopPropagation();
-        if (!targetContextMenuMsg) {
-            hideContextMenu();
-            return;
-        }
-
-        const targetUid = targetContextMenuMsg.uid;
-        hideContextMenu();
-
-        await navigator.clipboard.writeText(targetUid);
-    });
-
-    msgContextBan.addEventListener("click", async (e) => {
-        e.stopPropagation();
-        if (!targetContextMenuMsg) {
-            hideContextMenu();
-            return;
-        }
-
-        const { uid: targetUid, username: targetUsername } = targetContextMenuMsg;
-        hideContextMenu();
-
-        if (targetUid === uid) {
-            alert("You cannot ban yourself.");
-            return;
-        }
-
-        const banSnap = await get(ref(db, `bans/${targetUid}`));
-        if (banSnap.exists()) {
-            const confirmUnban = confirm(`User @${targetUsername} is currently banned. Do you want to unban them?`);
-            if (!confirmUnban) return;
-
-            await remove(ref(db, `bans/${targetUid}`));
-            alert(`User @${targetUsername} has been unbanned.`);
-            return;
-        }
-
-        const durationHours = prompt(`Ban duration (hours):`);
-        if (!durationHours) return;
-
-        const reason = prompt(`Reason for ban:`);
-        if (!reason) return;
-
-        const adminSnap = await get(ref(db, `admins/${targetUid}`));
-        if (adminSnap.exists()) {
-            alert("You cannot ban another admin.");
-            return;
-        }
-
-        await set(ref(db, `bans/${targetUid}`), {
-            username: targetUsername,
-            reason,
-            duration: Number(durationHours) * 3600,
-            timestamp: Date.now(),
-            bannedBy: uid
-        });
-
-        await sendBotMessage("public", `🫡 Farewell, @${targetUsername}. Your journey on Acetyl has come to an end (u got banned lol).`);
-
-        alert(`User ${targetUsername} has been banned.`);
-    });
-
-    msgContextDelete.addEventListener("click", async (e) => {
-        e.stopPropagation();
-        if (!targetContextMenuMsg || !targetContextMenuMsg.id) {
-            hideContextMenu();
-            return;
-        }
-
-        const targetMsg = targetContextMenuMsg;
-        hideContextMenu();
-
-        if (targetMsg.fileUrl) {
-            const filename = targetMsg.fileUrl.split("/").pop();
-            const deleteUrl = `${UPLOAD_URL.replace("/upload", "")}/delete-file?name=${filename}`;
-            fetch(deleteUrl, { method: "DELETE" }).catch(err => console.error("File removal failed:", err));
-        }
-
-        await remove(ref(db, `servers/${currentServer}/messages/${targetMsg.id}`), writeOptions());
-    });
-
-    msgContextKick.addEventListener("click", async (e) => {
-        e.stopPropagation();
-        if (!targetContextMenuMsg) {
-            hideContextMenu();
-            return;
-        }
-
-        const targetUid = targetContextMenuMsg.uid;
-        const targetUsername = targetContextMenuMsg.username;
-
-        hideContextMenu();
-        await toggleKickUser(currentServer, targetUid, targetUsername);
-    });
-
-    if (msgContextMuteBtnEl) {
-        msgContextMuteBtnEl.addEventListener("click", async (e) => {
-            e.stopPropagation();
-            if (!targetContextMenuMsg) {
-                hideContextMenu();
-                return;
-            }
-
-            const { uid: targetUid, username: targetUsername } = targetContextMenuMsg;
-            hideContextMenu();
-
-            if (targetUid === uid) {
-                alert("You cannot mute yourself.");
-                return;
-            }
-
-            const targetAdminSnap = await get(ref(db, `admins/${targetUid}`));
-            if (targetAdminSnap.exists()) {
-                alert("You cannot mute another admin.");
-                return;
-            }
-
-            await toggleMuteUser(targetUid, targetUsername);
-        });
-    }
-
-    if (headerVoicechatBtnEl) {
-        headerVoicechatBtnEl.addEventListener("click", () => {
-            if (currentServer && currentServer !== "public" && currentServer !== "announcements") {
-                joinVoiceChat(currentServer);
-            }
-        });
-    }
-
-    if (voiceBackBtnEl) {
-        voiceBackBtnEl.addEventListener("click", () => leaveVoiceChat());
-    }
-
-    if (voiceMuteBtnEl) {
-        voiceMuteBtnEl.addEventListener("click", async () => {
-            if (!localAudioStream) return;
-
-            vcMuted = !vcMuted;
-
-            localAudioStream.getAudioTracks().forEach(track => {
-                track.enabled = !vcMuted;
-            });
-
-            const iconEl = voiceMuteBtnEl.querySelector("i");
-            if (vcMuted) {
-                iconEl.className = "fa-solid fa-microphone-slash";
-                voiceMuteBtnEl.classList.add("muted");
-                voiceMuteBtnEl.title = 'Unmute'
-            } else {
-                iconEl.className = "fa-solid fa-microphone";
-                voiceMuteBtnEl.classList.remove("muted");
-                voiceMuteBtnEl.title = 'Mute'
-            }
-
-            if (currentVoiceServer && uid) {
-                const voiceUserRef = ref(db, `servers/${currentVoiceServer}/voice/${uid}`);
-                await set(voiceUserRef, {
-                    username: username || "Anonymous",
-                    joinedAt: serverTimestamp(),
-                    vcMuted: vcMuted,
-                    msgKey: currentVoiceMsgKey
-                });
-            }
-        });
-    }  
-    
-    if (profilePicEl) {
-        const pfpInput = document.createElement("input");
-        pfpInput.type = "file";
-        pfpInput.accept = "image/*";
-        pfpInput.style.display = "none";
-        document.body.appendChild(pfpInput);
-
-        profilePicEl.style.cursor = "pointer";
-        profilePicEl.title = "Change profile picture";
-
-        profilePicEl.addEventListener("click", () => {
-            pfpInput.click();
-        });
-
-        pfpInput.addEventListener("change", (e) => {
-            const file = e.target.files[0];
-            if (file) {
-                handlePfpUpload(file);
-            }
-            pfpInput.value = "";
-        });
-    }
-
-    if (logoutBtnEl) {
-        logoutBtnEl.addEventListener("click", (e) => {
-            e.preventDefault();
-            handleLogout();
-        });
-    }
 }
 
 
@@ -1341,8 +1356,11 @@ async function toggleKickUser(serverId, targetUid, targetUsername) {
             timestamp: Date.now()
         }, writeOptions());
 
-        await remove(ref(db, `servers/${serverId}/members/${targetUid}`), writeOptions());
-        await remove(ref(db, `servers/${serverId}/activeUsers/${targetUid}`), writeOptions());
+        await Promise.all([
+            remove(ref(db, `servers/${serverId}/members/${targetUid}`), writeOptions()),
+            remove(ref(db, `servers/${serverId}/activeUsers/${targetUid}`), writeOptions()),
+            remove(ref(db, `users/${targetUid}/joinedServers/${serverId}`), writeOptions()) // <-- Added this to clear joinedServers
+        ]);
 
         await sendBotMessage(serverId, `👋 See you later! @${targetUsername} was kicked from the server.`);
 
@@ -1352,6 +1370,81 @@ async function toggleKickUser(serverId, targetUid, targetUsername) {
     if (rightSidebarEl && getComputedStyle(rightSidebarEl).display !== "none") {
         loadAllMembers(serverId);
     }
+}
+
+
+// CONTEXT MENU ACTIONS
+async function handleBanAction() {
+    if (!targetContextMenuMsg) return;
+    const targetUid = targetContextMenuMsg.uid;
+    const targetUsername = targetContextMenuMsg.username || userCache[targetUid]?.username || "User";
+    hideContextMenu();
+
+    if (targetUid === uid) {
+        alert("You cannot ban yourself.");
+        return;
+    }
+
+    const banSnap = await get(ref(db, `bans/${targetUid}`));
+    if (banSnap.exists()) {
+        const confirmUnban = confirm(`User @${targetUsername} is currently banned. Do you want to unban them?`);
+        if (!confirmUnban) return;
+
+        await remove(ref(db, `bans/${targetUid}`));
+        alert(`User @${targetUsername} has been unbanned.`);
+        return;
+    }
+
+    const durationHours = prompt(`Ban duration (hours):`);
+    if (!durationHours) return;
+
+    const reason = prompt(`Reason for ban:`);
+    if (!reason) return;
+
+    const adminSnap = await get(ref(db, `admins/${targetUid}`));
+    if (adminSnap.exists()) {
+        alert("You cannot ban another admin.");
+        return;
+    }
+
+    await set(ref(db, `bans/${targetUid}`), {
+        username: targetUsername,
+        reason,
+        duration: Number(durationHours) * 3600,
+        timestamp: Date.now(),
+        bannedBy: uid
+    });
+
+    await sendBotMessage("public", `🫡 Farewell, @${targetUsername}. Your journey on Acetyl has come to an end (u got banned lol).`);
+    alert(`User ${targetUsername} has been banned.`);
+}
+
+async function handleKickAction() {
+    if (!targetContextMenuMsg) return;
+    const targetUid = targetContextMenuMsg.uid;
+    const targetUsername = targetContextMenuMsg.username || userCache[targetUid]?.username || "User";
+    hideContextMenu();
+    await toggleKickUser(currentServer, targetUid, targetUsername);
+}
+
+async function handleMuteAction() {
+    if (!targetContextMenuMsg) return;
+    const targetUid = targetContextMenuMsg.uid;
+    const targetUsername = targetContextMenuMsg.username || userCache[targetUid]?.username || "User";
+    hideContextMenu();
+
+    if (targetUid === uid) {
+        alert("You cannot mute yourself.");
+        return;
+    }
+
+    const targetAdminSnap = await get(ref(db, `admins/${targetUid}`));
+    if (targetAdminSnap.exists()) {
+        alert("You cannot mute another admin.");
+        return;
+    }
+
+    await toggleMuteUser(targetUid, targetUsername);
 }
 
 
@@ -1819,33 +1912,6 @@ function updateNoServersMessage() {
 }
 
 
-// KICK FROM SERVER
-async function updateKickButton(serverCode) {
-    if (!contextKickBtnEl) return;
-
-    if (serverCode === "public" || serverCode === "announcements") {
-        contextKickBtnEl.classList.add("disabled");
-        return;
-    }
-
-    try {
-        const serverSnap = await get(ref(db, `servers/${serverCode}`));
-        const serverData = serverSnap.exists() ? serverSnap.val() : null;
-        const isOwner = serverData && serverData.createdBy === uid;
-        const canKick = isOwner || isAdmin;
-
-        if (canKick) {
-            contextKickBtnEl.classList.remove("disabled");
-        } else {
-            contextKickBtnEl.classList.add("disabled");
-            contextKickBtnEl.title = "Only the server owner or an admin can kick users";
-        }
-    } catch (err) {
-        contextKickBtnEl.classList.add("disabled");
-    }
-}
-
-
 // FILE UPLOAD
 async function uploadFile(file) {
     if (!auth.currentUser) {
@@ -2130,23 +2196,9 @@ function displayMessage(msg, isGrouped) {
     if (isGrouped) wrapper.classList.add("grouped");
     if (msg.isDM) wrapper.classList.add("dm-message");
 
-    wrapper.addEventListener("contextmenu", async (e) => {
+    wrapper.addEventListener("contextmenu", (e) => {
         e.preventDefault();
-        if (isAdmin) {
-            showMessageContextMenu(e, msg);
-            return;
-        }
-        if (currentServer !== "public") {
-            try {
-                const serverSnap = await get(ref(db, `servers/${currentServer}`));
-                const serverData = serverSnap.exists() ? serverSnap.val() : null;
-                if (serverData && serverData.createdBy === uid) {
-                    showMessageContextMenu(e, msg);
-                }
-            } catch (err) {
-                console.error("Owner permission check failed:", err);
-            }
-        }
+        showMessageContextMenu(e, msg);
     });
 
     if (!isGrouped) {
@@ -3437,6 +3489,94 @@ function setupNotificationListener(serverId) {
     }, { onlyOnce: true });
 }
 
+async function showMessageContextMenu(e, msg) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    document.querySelectorAll(".message.right-clicked").forEach(el => {
+        el.classList.remove("right-clicked");
+    });
+
+    targetContextMenuMsg = msg;
+
+    const msgEl = messagesListEl.querySelector(`[data-id="${msg.id}"]`);
+    if (msgEl) {
+        msgEl.classList.add("right-clicked");
+    }
+
+    const isMyMessage = msg.uid === uid;
+    
+    let isOwner = false;
+    if (currentServer !== "public" && currentServer !== "announcements" && currentServer !== "system") {
+        try {
+            const serverSnap = await get(ref(db, `servers/${currentServer}`));
+            const serverData = serverSnap.exists() ? serverSnap.val() : null;
+            if (serverData && serverData.createdBy === uid) {
+                isOwner = true;
+            }
+        } catch (err) {
+            console.error("Owner check failed:", err);
+        }
+    }
+
+    let canModerate = isAdmin; 
+
+    if (msgContextQuickActions) {
+        if (canModerate) {
+            msgContextQuickActions.classList.remove("hidden");
+            if (msgContextDivider1) msgContextDivider1.classList.remove("hidden");
+            if (msgIconKick) {
+                msgIconKick.style.display = (currentServer === "public" || currentServer === "announcements") ? "none" : "inline-block";
+            }
+        } else {
+            msgContextQuickActions.classList.add("hidden");
+            if (msgContextDivider1) msgContextDivider1.classList.add("hidden");
+        }
+    }
+
+    if (msgContextCopy) msgContextCopy.style.display = "block";
+    if (msgContextDm) msgContextDm.style.display = "block";
+    if (msgContextReport) msgContextReport.style.display = "block";
+
+    if (msgContextGetUid) {
+        msgContextGetUid.style.display = canModerate ? "block" : "none";
+    }
+
+    if (msgContextDelete) {
+        const canDelete = isMyMessage || canModerate;
+        if (canDelete) {
+            msgContextDelete.style.display = "block";
+            msgContextDelete.textContent = isMyMessage && !canModerate ? "Delete Message" : "Delete Message";
+            
+            let deleteDivider = document.getElementById("msgContextDeleteDivider");
+            if (!deleteDivider) {
+                deleteDivider = document.createElement("hr");
+                deleteDivider.id = "msgContextDeleteDivider";
+                msgContextDelete.parentNode.insertBefore(deleteDivider, msgContextDelete);
+            }
+            deleteDivider.style.display = (!canModerate && isMyMessage) ? "block" : "none";
+        } else {
+            msgContextDelete.style.display = "none";
+            const deleteDivider = document.getElementById("msgContextDeleteDivider");
+            if (deleteDivider) deleteDivider.style.display = "none";
+        }
+    }
+
+    if (contextMenuEl) contextMenuEl.classList.add("hidden");
+    messageContextMenu.classList.remove("hidden");
+
+    const menuHeight = messageContextMenu.offsetHeight;
+    const menuWidth = messageContextMenu.offsetWidth;
+    let top = e.clientY;
+    let left = e.clientX;
+
+    if (e.clientY + menuHeight > window.innerHeight) top = e.clientY - menuHeight;
+    if (e.clientX + menuWidth > window.innerWidth) left = e.clientX - menuWidth;
+
+    messageContextMenu.style.top = `${top}px`;
+    messageContextMenu.style.left = `${left}px`;
+}
+
 async function showServerContextMenu(e, serverCode) {
     e.preventDefault(); 
     e.stopPropagation();
@@ -3444,18 +3584,37 @@ async function showServerContextMenu(e, serverCode) {
     if (serverCode === "public" || serverCode === "announcements") return;
 
     contextMenuTargetServer = serverCode;
-    updateKickButton(serverCode);
 
     const isSystem = serverCode === "system";
-    if (contextInviteBtnEl) contextInviteBtnEl.style.display = isSystem ? "none" : "block";
-    if (contextKickBtnEl) contextKickBtnEl.style.display = isSystem ? "none" : "block";
 
-    if (contextLeaveBtnEl) {
+    let isOwner = false;
+    if (!isSystem) {
         try {
             const serverSnap = await get(ref(db, `servers/${serverCode}`));
             const serverData = serverSnap.exists() ? serverSnap.val() : null;
-            const isOwner = serverData && serverData.createdBy === uid;
+            isOwner = serverData && serverData.createdBy === uid;
+        } catch (err) {
+            console.error("Failed to check server ownership:", err);
+        }
+    }
 
+    if (isSystem) {
+        if (contextInviteBtnEl) contextInviteBtnEl.style.display = "block";
+        if (contextKickBtnEl) contextKickBtnEl.style.display = "none";
+        if (contextLeaveBtnEl) {
+            contextLeaveBtnEl.style.display = "block";
+            contextLeaveBtnEl.textContent = "Leave Server";
+            contextLeaveBtnEl.classList.add("danger");
+        }
+    } else {
+        if (contextInviteBtnEl) contextInviteBtnEl.style.display = "block";
+
+        if (contextKickBtnEl) {
+            contextKickBtnEl.style.display = (isOwner || isAdmin) ? "block" : "none";
+        }
+
+        if (contextLeaveBtnEl) {
+            contextLeaveBtnEl.style.display = "block";
             if (isOwner) {
                 contextLeaveBtnEl.textContent = "Delete Server";
                 contextLeaveBtnEl.classList.add("danger");
@@ -3463,9 +3622,6 @@ async function showServerContextMenu(e, serverCode) {
                 contextLeaveBtnEl.textContent = "Leave Server";
                 contextLeaveBtnEl.classList.add("danger");
             }
-        } catch (err) {
-            contextLeaveBtnEl.textContent = "Leave Server";
-            contextLeaveBtnEl.classList.add("danger");
         }
     }
 
@@ -3515,92 +3671,6 @@ function hideContextMenu(e) {
     document.querySelectorAll(".message.right-clicked").forEach(el => {
         el.classList.remove("right-clicked");
     });
-}
-
-async function showMessageContextMenu(e, msg) {
-    e.preventDefault();
-    e.stopPropagation();
-
-    document.querySelectorAll(".message.right-clicked").forEach(el => {
-        el.classList.remove("right-clicked");
-    });
-
-    targetContextMenuMsg = msg;
-
-    const msgEl = messagesListEl.querySelector(`[data-id="${msg.id}"]`);
-    if (msgEl) {
-        msgEl.classList.add("right-clicked");
-    }
-
-    const serverSnap = await get(ref(db, `servers/${currentServer}`));
-    const serverData = serverSnap.exists() ? serverSnap.val() : null;
-    const isOwner = serverData && serverData.createdBy === uid;
-    const targetAdminSnap = await get(ref(db, `admins/${msg.uid}`));
-    const isTargetAdmin = targetAdminSnap.exists() && targetAdminSnap.val() === true;
-
-    const canDelete = isAdmin || isOwner;
-    if (msgContextDelete) {
-        if (canDelete) {
-            msgContextDelete.classList.remove("disabled");
-            msgContextDelete.style.display = "block";
-        } else {
-            msgContextDelete.classList.add("disabled");
-            msgContextDelete.style.display = "none";
-        }
-    }
-
-    const canKick = (isAdmin && currentServer !== "public") || (isOwner && currentServer !== "public");
-    if (msgContextKick) {
-        if (canKick) {
-            msgContextKick.classList.remove("disabled");
-            msgContextKick.style.display = "block";
-        } else {
-            msgContextKick.classList.add("disabled");
-            msgContextKick.style.display = "none";
-        }
-    }
-
-    if (msgContextGetUid) {
-        msgContextGetUid.style.display = isAdmin ? "block" : "none";
-    }
-
-    if (msgContextBan) {
-        msgContextBan.style.display = isAdmin ? "block" : "none";
-    }
-
-    if (msgContextMuteBtnEl) {
-        if (isAdmin && msg.uid !== uid) {
-            try {
-                if (!isTargetAdmin) {
-                    const muteSnap = await get(ref(db, `mutes/${msg.uid}`));
-                    msgContextMuteBtnEl.textContent = muteSnap.exists() ? "Unmute User" : "Mute User";
-                    msgContextMuteBtnEl.classList.remove("disabled");
-                    msgContextMuteBtnEl.style.display = "block";
-                } else {
-                    msgContextMuteBtnEl.style.display = "none";
-                }
-            } catch (err) {
-                msgContextMuteBtnEl.style.display = "none";
-            }
-        } else {
-            msgContextMuteBtnEl.style.display = "none";
-        }
-    }
-
-    if (contextMenuEl) contextMenuEl.classList.add("hidden");
-
-    messageContextMenu.classList.remove("hidden");
-
-    const menuHeight = messageContextMenu.offsetHeight;
-    const menuWidth = messageContextMenu.offsetWidth;
-    let top = e.clientY;
-    let left = e.clientX;
-
-    if (e.clientY + menuHeight > window.innerHeight) top = e.clientY - menuHeight;
-    if (e.clientX + menuWidth > window.innerWidth) left = e.clientX - menuWidth;
-
-    messageContextMenu.style.top = `${top}px`;
-    messageContextMenu.style.left = `${left}px`;
 }
 
 async function handleInvite() {
