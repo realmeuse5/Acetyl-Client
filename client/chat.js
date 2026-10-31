@@ -1018,7 +1018,7 @@ function attachUIListeners() {
     if (msgIconBan) msgIconBan.addEventListener("click", handleBanAction);
 
     adminBtnEl.addEventListener("click", async () => {
-        const isAdminCheck = await get(ref(db, `admins/${uid}`));
+        const isAdminCheck = await get(ref(db, `status/admins/${uid}`));
         if (!isAdminCheck.exists()) {
             alert("You are not an admin.");
             return;
@@ -1074,7 +1074,7 @@ function attachUIListeners() {
                 const reason = prompt("Reason for ban:");
                 if (!reason) return;
 
-                const adminSnap = await get(ref(db, `admins/${targetUid}`));
+                const adminSnap = await get(ref(db, `status/admins/${targetUid}`));
                 if (adminSnap.exists()) {
                     alert("You cannot ban another admin.");
                     return;
@@ -1143,7 +1143,7 @@ function attachUIListeners() {
                     return;
                 }
 
-                const adminSnap = await get(ref(db, `admins/${targetUid}`));
+                const adminSnap = await get(ref(db, `status/admins/${targetUid}`));
                 if (adminSnap.exists()) {
                     alert("You cannot mute another admin.");
                     return;
@@ -1209,7 +1209,7 @@ async function changeUsername() {
 async function checkAdminStatus() {
     if (!uid) return;
 
-    const adminRef = ref(db, `admins/${uid}`);
+    const adminRef = ref(db, `status/admins/${uid}`);
     const snap = await get(adminRef);
 
     if (snap.exists()) {
@@ -1334,7 +1334,7 @@ async function toggleKickUser(serverId, targetUid, targetUsername) {
         return;
     }
 
-    const targetAdminSnap = await get(ref(db, `admins/${targetUid}`));
+    const targetAdminSnap = await get(ref(db, `status/admins/${targetUid}`));
     if (targetAdminSnap.exists()) {
         alert("You cannot kick an admin.");
         return;
@@ -1401,7 +1401,7 @@ async function handleBanAction() {
     const reason = prompt(`Reason for ban:`);
     if (!reason) return;
 
-    const adminSnap = await get(ref(db, `admins/${targetUid}`));
+    const adminSnap = await get(ref(db, `status/admins/${targetUid}`));
     if (adminSnap.exists()) {
         alert("You cannot ban another admin.");
         return;
@@ -1438,7 +1438,7 @@ async function handleMuteAction() {
         return;
     }
 
-    const targetAdminSnap = await get(ref(db, `admins/${targetUid}`));
+    const targetAdminSnap = await get(ref(db, `status/admins/${targetUid}`));
     if (targetAdminSnap.exists()) {
         alert("You cannot mute another admin.");
         return;
@@ -2235,10 +2235,11 @@ function displayMessage(msg, isGrouped) {
             nameEl.title = "Click to DM this user";
 
             nameEl.addEventListener("click", () => {
-                const currentName = nameEl.textContent.trim();
-                if (currentName === username || currentName === "Loading...") return;
+                const targetName = profile.username;
+                
+                if (msg.uid === uid || !targetName || targetName === "Loading...") return;
 
-                messageInputEl.innerHTML = `<span class="input-mention" contenteditable="false">@${currentName},</span>&nbsp;`;
+                messageInputEl.innerHTML = `<span class="input-mention" contenteditable="false">@${targetName},</span>&nbsp;`;
                 messageInputEl.focus();
                 const range = document.createRange();
                 const selection = window.getSelection();
@@ -2431,6 +2432,7 @@ function displayAnnouncement(msg) {
 function updateNameElement(nameEl, profile, msg) {
     const displayUsername = msg.isSystem ? msg.username : profile.username;
     const displayIsAdmin = msg.isSystem ? false : profile.isAdmin;
+    const displayIsOg = msg.isSystem ? false : profile.isOg;
 
     if (msg.isSystem) {
         nameEl.textContent = displayUsername;
@@ -2439,6 +2441,11 @@ function updateNameElement(nameEl, profile, msg) {
         nameEl.innerHTML = `
             <span class="admin-username">${displayUsername}</span>
             <i class="fa-solid fa-circle-check admin-badge" title="Admin"></i>
+        `;
+    } else if (displayIsOg) {
+        nameEl.innerHTML = `
+            <span class="og-username">${displayUsername}</span>
+            <span class="og-badge" title="Here from the start">OG</span>
         `;
     } else {
         nameEl.textContent = displayUsername;
@@ -2458,24 +2465,26 @@ function formatMessage(text) {
 
 function getProfile(targetUid, onUpdate) {
     if (targetUid === "system" || targetUid === "no-auth") {
-        return { username: "Server Bot", isAdmin: false, pfpUrl: "/client/Assets/botPfp.png" };
+        return { username: "Server Bot", isAdmin: false, isOg: false, pfpUrl: "/client/Assets/botPfp.png" };
     }
     
     if (userCache[targetUid]) {
         return userCache[targetUid];
     }
 
-    const fallback = { username: "Loading...", isAdmin: false, pfpUrl: "/client/Assets/pfp.png" };
+    const fallback = { username: "Loading...", isAdmin: false, isOg: false, pfpUrl: "/client/Assets/pfp.png" };
 
     Promise.all([
         get(ref(db, `users/${targetUid}`)),
-        get(ref(db, `admins/${targetUid}`))
-    ]).then(([userSnap, adminSnap]) => {
+        get(ref(db, `status/admins/${targetUid}`)),
+        get(ref(db, `status/og/${targetUid}`))
+    ]).then(([userSnap, adminSnap, ogSnap]) => {
         const userData = userSnap.exists() ? userSnap.val() : {};
         const profile = {
             username: userData.username || "Unknown User",
-            pfpUrl: userData.pfpUrl || "/client/Assets/pfp.png", // Fallback to default asset
-            isAdmin: adminSnap.exists() && adminSnap.val() === true
+            pfpUrl: userData.pfpUrl || "/client/Assets/pfp.png",
+            isAdmin: adminSnap.exists() && adminSnap.val() === true,
+            isOg: ogSnap.exists() && ogSnap.val() === true
         };
 
         userCache[targetUid] = profile;
@@ -2549,15 +2558,23 @@ function setupActiveUserListener(code) {
 
                 const li = document.createElement("li");
 
-                get(ref(db, `admins/${userUid}`)).then((adminSnap) => {
+                Promise.all([
+                    get(ref(db, `status/admins/${userUid}`)),
+                    get(ref(db, `status/og/${userUid}`))
+                ]).then(([adminSnap, ogSnap]) => {
                     const isUserAdmin = adminSnap.exists() && adminSnap.val() === true;
+                    const isUserOg = ogSnap.exists() && ogSnap.val() === true;
 
                     if (isOwner && isUserAdmin) {
                         li.innerHTML = `<span class="member-list-admin">${username}</span> <i class="fa-solid fa-circle-check admin-badge" title="Admin"></i> <span title="Server owner">👑</span>`;
-                    } else if (isOwner && !isUserAdmin) {
+                    } else if (isOwner && isUserOg) {
+                        li.innerHTML = `<span class="member-list-og">${username}</span> <span class="og-badge" title="Here from the start">OG</span> <span title="Server owner">👑</span>`;
+                    } else if (isOwner) {
                         li.innerHTML = `${username} <span title="Server owner">👑</span>`;
-                    } else if (isUserAdmin && !isOwner) {
+                    } else if (isUserAdmin) {
                         li.innerHTML = `<span class="member-list-admin">${username}</span> <i class="fa-solid fa-circle-check admin-badge" title="Admin"></i>`;
+                    } else if (isUserOg) {
+                        li.innerHTML = `<span class="member-list-og">${username}</span> <span class="og-badge" title="Here from the start">OG</span>`;
                     } else {
                         li.textContent = username;
                     }
@@ -2615,9 +2632,10 @@ async function loadAllMembers(code) {
             const memberUids = Object.keys(membersSnap.val());
 
             for (const memberUid of memberUids) {
-                const [userSnap, adminSnap] = await Promise.all([
+                const [userSnap, adminSnap, ogSnap] = await Promise.all([
                     get(ref(db, `users/${memberUid}/username`)),
-                    get(ref(db, `admins/${memberUid}`))
+                    get(ref(db, `status/admins/${memberUid}`)),
+                    get(ref(db, `status/og/${memberUid}`))
                 ]);
 
                 if (!userSnap.exists()) {
@@ -2627,16 +2645,21 @@ async function loadAllMembers(code) {
 
                 const username = userSnap.val();
                 const isUserAdmin = adminSnap.exists() && adminSnap.val() === true;
+                const isUserOg = ogSnap.exists() && ogSnap.val() === true;
                 const isOwner = !isPublic && (memberUid === ownerUid);
 
                 const li = document.createElement("li");
 
                 if (isOwner && isUserAdmin) {
                     li.innerHTML = `<span class="member-list-admin">${username}</span> <i class="fa-solid fa-circle-check admin-badge" title="Admin"></i> <span title="Server owner">👑</span>`;
-                } else if (isOwner && !isUserAdmin) {
+                } else if (isOwner && isUserOg) {
+                    li.innerHTML = `<span class="member-list-og">${username}</span> <span class="og-badge" title="Original Member">OG</span> <span title="Server owner">👑</span>`;
+                } else if (isOwner) {
                     li.innerHTML = `${username} <span title="Server owner">👑</span>`;
-                } else if (isUserAdmin && !isOwner) {
+                } else if (isUserAdmin) {
                     li.innerHTML = `<span class="member-list-admin">${username}</span> <i class="fa-solid fa-circle-check admin-badge" title="Admin"></i>`;
+                } else if (isUserOg) {
+                    li.innerHTML = `<span class="member-list-og">${username}</span> <span class="og-badge" title="Original Member">OG</span>`;
                 } else {
                     li.textContent = username;
                 }

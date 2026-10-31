@@ -3,13 +3,13 @@
     line-height: 0.7;
     border-bottom: #29292d 1px solid;
     display: flex;
-    justify-content: space-between;
-}
-
-#section-1 img {
-    max-width: 300px;        
-    height: auto;
-    object-fit: contain;
+    flex-direction: column;
+    background: 
+        radial-gradient(ellipse 70% 80% at 20% 30%, rgba(0, 0, 0, 0.95) 0%, rgba(0, 0, 0, 0.75) 50%, rgba(0, 0, 0, 0) 100%),
+        repeating-linear-gradient(165deg, #4e00ca 0%, #ff0044 100%), 
+        repeating-linear-gradient(45deg, #ff0044 0%, #4e00ca 25%, #4e00ca 50%, #ff0044 75%, #4e00ca 100%);
+    
+    background-blend-mode: normal, hard-light;
 }
 
 #section-1 h2 {
@@ -22,6 +22,8 @@
     font-family: 'Cal Sans', sans-serif;
     color: #fff;
     font-size: 6rem;
+    margin-top: 40px;
+    margin-bottom: 70px;
 }
 
 #section-1 h1 span {
@@ -82,6 +84,7 @@
     font-family: 'DM Sans', sans-serif;
     font-weight: 400;
     font-size: 1rem;
+    margin: 10px 0;
 }
 
 #section-2 video {

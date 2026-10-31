@@ -780,7 +780,7 @@ a {
     margin-left: 15px;
 }
 
-.username:not(:has(.admin-username)):hover {
+.username:not(:has(.admin-username)):not(:has(.og-username)):hover {
     text-decoration: underline;
     text-decoration-thickness: 1px;
     text-underline-offset: 3px;
@@ -821,6 +821,47 @@ a {
     margin-left: 10px;
     align-self: center;
     text-decoration: none;
+}
+
+.og-username {
+    background: linear-gradient(90deg, #a1dbfc, #0ACEBC);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-weight: 600;
+    background-clip: transparent;
+    font-size: 1.3rem;
+    position: relative;
+    display: inline-block;
+}
+
+.og-username::after {
+    content: '';
+    position: absolute;
+    width: 100%;
+    height: 1.5px;
+    bottom: 3px;
+    left: 0;
+    background: linear-gradient(90deg, #a1dbfc, #0ACEBC);
+    transform: scaleX(0);
+    transform-origin: left;
+}
+
+.og-username:hover::after {
+    transform: scaleX(1);
+}
+
+.og-badge {
+    align-items: center;
+    justify-content: center;
+    background-color: #1c1c1e;
+    color: #96979e;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-left: 8px;
+    align-self: center;
+    cursor: pointer;
 }
 
 .system-username {
@@ -1111,7 +1152,7 @@ a {
     border-radius: 6px;
     cursor: pointer;
     color: #fff;
-    padding: 5px 10px;
+    padding: 5px 20px;
     border: none;
     font-weight: 500;
     font-size: 15px;
@@ -1189,10 +1230,20 @@ a {
     text-overflow: ellipsis;
     overflow: hidden;
     white-space: nowrap;
+    display: flex;          
+    align-items: center;
+    gap: 6px;
 }
 
 .member-list-admin {
     background: linear-gradient(90deg, #4E00CA, #FF0044);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: transparent;
+}
+
+.member-list-og {
+    background: linear-gradient(90deg, #a1dbfc, #0ACEBC);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: transparent;
