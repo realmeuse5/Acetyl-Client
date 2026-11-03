@@ -116,6 +116,7 @@ let msgIconBan;
 let msgContextCopy;
 let msgContextDm;
 let msgContextReport;
+let msgContextHwBan;
 let msgContextGetUid;
 let msgContextDelete;
 let newMessage;
@@ -180,9 +181,10 @@ window.onload = async () => {
     msgContextCopy = document.getElementById("msgContextCopy");
     msgContextDm = document.getElementById("msgContextDm");
     msgContextReport = document.getElementById("msgContextReport");
+    msgContextHwBan = document.getElementById("msgContextHwBan");
     msgContextGetUid = document.getElementById("msgContextGetUid");
     msgContextDelete = document.getElementById("msgContextDelete");
-    newMessage = new Audio('/client/Assets/newMessage.mp3');
+    newMessage = new Audio('/client/assets/newMessage.mp3');
 
     await initAuthMode();
     initSettingsUI();
@@ -251,6 +253,8 @@ window.onload = async () => {
         window.uid = user.uid;
         
         await checkBanStatus(uid);
+        await checkDeviceBan(user);
+
         await finishAppLoad();
     });
 };
@@ -957,6 +961,13 @@ function attachUIListeners() {
         });
     }
 
+    if (msgContextHwBan) {
+        msgContextHwBan.addEventListener("click", (e) => {
+            e.stopPropagation();
+            handleHwBanAction();
+        });
+    }
+
     if (msgContextGetUid) {
         msgContextGetUid.addEventListener("click", async (e) => {
             e.stopPropagation();
@@ -1094,8 +1105,65 @@ function attachUIListeners() {
                 break;
             }
 
+            case "/hwban": {
+                const targetUsername = prompt("Enter the username to hardware ban:");
+                if (!targetUsername) return;
+
+                const usersSnap = await get(ref(db, "users"));
+                if (!usersSnap.exists()) {
+                    alert("No users database found.");
+                    break;
+                }
+
+                let targetUid = null;
+                let targetHwid = null;
+
+                usersSnap.forEach(child => {
+                    const userData = child.val();
+                    if (userData.username === targetUsername) {
+                        targetUid = child.key;
+                        targetHwid = userData.hwid;
+                    }
+                });
+
+                if (!targetUid) {
+                    alert(`User @${targetUsername} not found.`);
+                    break;
+                }
+
+                if (!targetHwid) {
+                    alert(`User @${targetUsername} has no registered HWID.`);
+                    break;
+                }
+
+                const banRef = ref(db, `hwBans/${targetHwid}`);
+                const banSnap = await get(banRef);
+
+                if (banSnap.exists()) {
+                    const shouldUnban = confirm(`Device for @${targetUsername} is already hardware banned. Do you want to unban this device?`);
+                    if (shouldUnban) {
+                        await remove(banRef);
+                        alert(`Device for @${targetUsername} has been unbanned.`);
+                    }
+                    break;
+                }
+
+                const reason = prompt(`Enter reason for hardware banning @${targetUsername}:`);
+                if (!reason) return;
+
+                await set(banRef, {
+                    username: targetUsername,
+                    reason: reason,
+                    timestamp: Date.now(),
+                    bannedBy: auth.currentUser.uid
+                });
+
+                alert(`Device for @${targetUsername} has been hardware banned.`);
+                break;
+            }
+
             case "/admins": {
-                const adminsSnap = await get(ref(db, "admins"));
+                const adminsSnap = await get(ref(db, "status/admins"));
                 if (!adminsSnap.exists()) {
                     alert("No admins found.");
                     break;
@@ -1266,6 +1334,26 @@ async function checkBanStatus(userUid) {
             bannedEl.style.display = "block";
         }
     });
+}
+
+async function checkDeviceBan(currentUser) {
+    const hwid = await generateHWID();
+
+    await set(ref(db, `users/${currentUser.uid}/hwid`), hwid);
+
+    const hwBanSnap = await get(ref(db, `hwBans/${hwid}`));
+    if (hwBanSnap.exists()) {
+        const banData = hwBanSnap.val();
+        
+        document.getElementById("bannedMsg").innerHTML = `
+            This device has been hardware banned from Acetyl Client.<br>
+            Reason: <span>${banData.reason || "unspecified"}</span>
+        `;
+        document.getElementById("webContainer").style.display = "none";
+        document.getElementById("banned").style.display = "block";
+        return true;
+    }
+    return false;
 }
 
 
@@ -1445,6 +1533,69 @@ async function handleMuteAction() {
     }
 
     await toggleMuteUser(targetUid, targetUsername);
+}
+
+async function handleHwBanAction() {
+    if (!targetContextMenuMsg) {
+        hideContextMenu();
+        return;
+    }
+
+    const targetUid = targetContextMenuMsg.uid;
+    const targetUsername = targetContextMenuMsg.username || userCache[targetUid]?.username || "User";
+    
+    hideContextMenu();
+
+    if (!targetUid) {
+        alert("Could not identify the target user UID.");
+        return;
+    }
+
+    if (targetUid === uid) {
+        alert("You cannot hardware ban yourself.");
+        return;
+    }
+
+    try {
+        const userSnap = await get(ref(db, `users/${targetUid}`));
+        if (!userSnap.exists()) {
+            alert(`User profile for @${targetUsername} not found.`);
+            return;
+        }
+
+        const targetHwid = userSnap.val().hwid;
+        if (!targetHwid) {
+            alert(`User @${targetUsername} has no registered HWID.`);
+            return;
+        }
+
+        const banRef = ref(db, `hwBans/${targetHwid}`);
+        const banSnap = await get(banRef);
+
+        if (banSnap.exists()) {
+            const shouldUnban = confirm(`Device for @${targetUsername} is already hardware banned. Do you want to unban this device?`);
+            if (shouldUnban) {
+                await remove(banRef);
+                alert(`Device for @${targetUsername} has been unbanned.`);
+            }
+            return;
+        }
+
+        const reason = prompt(`Enter reason for hardware banning @${targetUsername}:`);
+        if (!reason) return;
+
+        await set(banRef, {
+            username: targetUsername,
+            reason: reason,
+            timestamp: Date.now(),
+            bannedBy: auth.currentUser.uid
+        });
+
+        alert(`Device for @${targetUsername} has been hardware banned.`);
+    } catch (err) {
+        console.error("HWID ban action failed:", err);
+        alert("An error occurred while attempting to hardware ban the user.");
+    }
 }
 
 
@@ -2465,14 +2616,14 @@ function formatMessage(text) {
 
 function getProfile(targetUid, onUpdate) {
     if (targetUid === "system" || targetUid === "no-auth") {
-        return { username: "Server Bot", isAdmin: false, isOg: false, pfpUrl: "/client/Assets/botPfp.png" };
+        return { username: "Server Bot", isAdmin: false, isOg: false, pfpUrl: "/client/assets/botPfp.png" };
     }
     
     if (userCache[targetUid]) {
         return userCache[targetUid];
     }
 
-    const fallback = { username: "Loading...", isAdmin: false, isOg: false, pfpUrl: "/client/Assets/pfp.png" };
+    const fallback = { username: "Loading...", isAdmin: false, isOg: false, pfpUrl: "/client/assets/pfp.png" };
 
     Promise.all([
         get(ref(db, `users/${targetUid}`)),
@@ -2482,7 +2633,7 @@ function getProfile(targetUid, onUpdate) {
         const userData = userSnap.exists() ? userSnap.val() : {};
         const profile = {
             username: userData.username || "Unknown User",
-            pfpUrl: userData.pfpUrl || "/client/Assets/pfp.png",
+            pfpUrl: userData.pfpUrl || "/client/assets/pfp.png",
             isAdmin: adminSnap.exists() && adminSnap.val() === true,
             isOg: ogSnap.exists() && ogSnap.val() === true
         };
@@ -3458,7 +3609,7 @@ function maybeNotify(msg, serverId) {
         const profile = getProfile(msg.uid, (freshProfile) => {});
 
         const senderName = profile.username && profile.username !== "Loading..." ? profile.username : "Someone";
-        const senderIcon = profile.pfpUrl || "/client/Assets/pfp.png";
+        const senderIcon = profile.pfpUrl || "/client/assets/pfp.png";
 
         const title = `${senderName} sent a message`;
         const body = `on #${serverName}`;
@@ -3560,6 +3711,10 @@ async function showMessageContextMenu(e, msg) {
     if (msgContextCopy) msgContextCopy.style.display = "block";
     if (msgContextDm) msgContextDm.style.display = "block";
     if (msgContextReport) msgContextReport.style.display = "block";
+
+    if (msgContextHwBan) {
+        msgContextHwBan.style.display = canModerate ? "block" : "none";
+    }
 
     if (msgContextGetUid) {
         msgContextGetUid.style.display = canModerate ? "block" : "none";
@@ -3765,5 +3920,49 @@ function setInputDisabledState(isDisabled, placeholderText) {
 
         if (fileInputEl) fileInputEl.disabled = false;
         if (typeof attachBtnEl !== "undefined" && attachBtnEl) attachBtnEl.disabled = false;
+    }
+}
+
+async function generateHWID() {
+    let renderer = "unknown";
+    try {
+        const canvas = document.createElement('canvas');
+        const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+        if (gl) {
+            const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+            if (debugInfo) {
+                renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) || gl.getParameter(37446);
+            }
+        }
+    } catch (e) {
+    }
+
+    const signals = [
+        screen.width + "x" + screen.height,
+        screen.colorDepth,                        
+        renderer,
+        navigator.hardwareConcurrency || "unknown",
+        navigator.deviceMemory || "unknown",     
+        Intl.DateTimeFormat().resolvedOptions().timeZone
+    ].join("|||");
+
+    if (window.crypto && window.crypto.subtle) {
+        const msgBuffer = new TextEncoder().encode(signals);
+        const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        const hwid = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        console.log("Generated HWID SHA-256 Hash:", hwid);
+        return hwid;
+    } else {
+        console.warn("crypto.subtle unavailable on insecure IP.");
+        let hash = 0;
+        for (let i = 0; i < signals.length; i++) {
+            const char = signals.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash |= 0; 
+        }
+        const fallbackHwid = "insecure_net_" + Math.abs(hash).toString(16);
+        console.log("Generated HWID Fallback Hash:", fallbackHwid);
+        return fallbackHwid;
     }
 }
