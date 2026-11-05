@@ -58,6 +58,8 @@ let isMuted = false;
 let muteUnsub = null;
 let lastUploadTimestamp = 0;
 let isHandlingSignup = false;
+let lastVoiceUsers = [];
+let screenShareListenerUnsub = null;
 
 
 // UI ELEMENTS
@@ -102,6 +104,7 @@ let voiceContainerEl;
 let voiceHeaderNameEl;
 let voiceBackBtnEl;
 let voiceMuteBtnEl;
+let voiceShareBtnEl;
 let contextMenuEl;
 let contextLeaveBtnEl;
 let contextInviteBtnEl;
@@ -116,10 +119,11 @@ let msgIconBan;
 let msgContextCopy;
 let msgContextDm;
 let msgContextReport;
-let msgContextHwBan;
 let msgContextGetUid;
 let msgContextDelete;
 let newMessage;
+let joinVc;
+let leaveVc;
 
 function writeOptions() { return { auth: { uid } }; }
 
@@ -167,6 +171,7 @@ window.onload = async () => {
     voiceHeaderNameEl = document.getElementById("voiceHeaderName");
     voiceBackBtnEl = document.getElementById("voiceBackBtn");
     voiceMuteBtnEl = document.getElementById("voiceMuteBtn");
+    voiceShareBtnEl = document.getElementById("voiceShareBtn");
     contextMenuEl = document.getElementById("serverContextMenu");
     contextLeaveBtnEl = document.getElementById("contextLeaveServer");
     contextInviteBtnEl = document.getElementById("contextInvite");
@@ -181,10 +186,11 @@ window.onload = async () => {
     msgContextCopy = document.getElementById("msgContextCopy");
     msgContextDm = document.getElementById("msgContextDm");
     msgContextReport = document.getElementById("msgContextReport");
-    msgContextHwBan = document.getElementById("msgContextHwBan");
     msgContextGetUid = document.getElementById("msgContextGetUid");
     msgContextDelete = document.getElementById("msgContextDelete");
     newMessage = new Audio('/client/assets/newMessage.mp3');
+    joinVc = new Audio('/client/assets/joinVc.mp3');
+    leaveVc = new Audio('/client/assets/leaveVc.mp3');
 
     await initAuthMode();
     initSettingsUI();
@@ -582,7 +588,6 @@ async function validateSavedServers() {
                 await remove(ref(db, `servers/${code}/activeUsers/${uid}`), writeOptions());
             }
         } else {
-            console.log(`Removing deleted server record: ${code}`);
         }
     }
 
@@ -820,6 +825,91 @@ function attachUIListeners() {
         });
     }
 
+    if (voiceShareBtnEl) {
+        voiceShareBtnEl.addEventListener("click", async () => {
+            if (!currentVoiceServer || !uid) return;
+
+            const screenShareRef = ref(db, `servers/${currentVoiceServer}/voiceScreenShare`);
+            const snap = await get(screenShareRef);
+
+            if (snap.exists()) {
+                const sharingData = snap.val();
+                if (sharingData.uid !== uid) {
+                    alert(`Someone is already screen sharing in this server. Only one user can screen share at a time.`);
+                    return;
+                } else {
+                    await stopScreenShare();
+                    return;
+                }
+            }
+
+            try {
+                const screenStream = await navigator.mediaDevices.getDisplayMedia({
+                    video: { cursor: "always" },
+                    audio: false
+                });
+
+                window.activeScreenStream = screenStream;
+                const videoTrack = screenStream.getVideoTracks()[0];
+
+                await set(screenShareRef, {
+                    uid: uid,
+                    username: username || "User"
+                }, writeOptions());
+
+                onDisconnect(screenShareRef).remove(writeOptions());
+
+                renderScreenCard(screenStream, uid, username || "User");
+
+                const senders = [];
+                for (const [remoteUid, pc] of Object.entries(peerConnections)) {
+                    const sender = pc.addTrack(videoTrack, screenStream);
+                    senders.push({ pc, sender });
+
+                    try {
+                        const offer = await pc.createOffer();
+                        await pc.setLocalDescription(offer);
+                        
+                        const offerRef = ref(db, `servers/${currentVoiceServer}/signal/${remoteUid}/${uid}/offers`);
+                        push(offerRef, {
+                            sdp: pc.localDescription.sdp,
+                            type: pc.localDescription.type,
+                            fromUid: uid
+                        });
+                    } catch (err) {
+                        console.error("[ScreenShare] Error re-negotiating offer for track:", err);
+                    }
+                }
+
+                videoTrack.onended = async () => {
+                    screenStream.getTracks().forEach(track => track.stop());
+                    
+                    for (const { pc, sender } of senders) {
+                        try {
+                            pc.removeTrack(sender);
+                        } catch (err) {
+                            console.warn("[ScreenShare] Error removing track from PC:", err);
+                        }
+                    }
+
+                    const localCard = document.getElementById(`screen-card-${uid}`);
+                    if (localCard) localCard.remove();
+
+                    await remove(screenShareRef, writeOptions());
+                    voiceShareBtnEl.classList.remove("sharing");
+                    window.activeScreenStream = null;
+                    console.log("[ScreenShare] Stopped sharing via browser control.");
+                };
+
+                voiceShareBtnEl.classList.add("sharing");
+                console.log("[ScreenShare] Successfully capturing and rendering preview.");
+
+            } catch (err) {
+                console.error("[ScreenShare] User cancelled or failed to get display media:", err);
+            }
+        });
+    }
+
     document.addEventListener("click", hideContextMenu);
     document.addEventListener("scroll", hideContextMenu, true);
 
@@ -958,13 +1048,6 @@ function attachUIListeners() {
                 `Hello Acetyl Support,\n\nI would like to report the user @${targetUser} for violating community guidelines.\n\nUID: ${targetUid}\nMessage ID: ${msgId}`
             );
             window.location.href = `mailto:support@acetyl.cc?subject=${subject}&body=${body}`;
-        });
-    }
-
-    if (msgContextHwBan) {
-        msgContextHwBan.addEventListener("click", (e) => {
-            e.stopPropagation();
-            handleHwBanAction();
         });
     }
 
@@ -1344,7 +1427,17 @@ async function checkDeviceBan(currentUser) {
     const hwBanSnap = await get(ref(db, `hwBans/${hwid}`));
     if (hwBanSnap.exists()) {
         const banData = hwBanSnap.val();
-        
+
+        const adminSnap = await get(ref(db, `status/admins/${currentUser.uid}`));
+        const isUserAdmin = adminSnap.exists() && adminSnap.val() === true;
+
+        if (isUserAdmin) {
+            alert("This device has been hardware banned. Being an admin bypasses this.");
+            webContainerEl.style.display = "flex";
+            bannedEl.style.display = "none";
+            return false;
+        }
+
         document.getElementById("bannedMsg").innerHTML = `
             This device has been hardware banned from Acetyl Client.<br>
             Reason: <span>${banData.reason || "unspecified"}</span>
@@ -1353,6 +1446,7 @@ async function checkDeviceBan(currentUser) {
         document.getElementById("banned").style.display = "block";
         return true;
     }
+
     return false;
 }
 
@@ -1533,69 +1627,6 @@ async function handleMuteAction() {
     }
 
     await toggleMuteUser(targetUid, targetUsername);
-}
-
-async function handleHwBanAction() {
-    if (!targetContextMenuMsg) {
-        hideContextMenu();
-        return;
-    }
-
-    const targetUid = targetContextMenuMsg.uid;
-    const targetUsername = targetContextMenuMsg.username || userCache[targetUid]?.username || "User";
-    
-    hideContextMenu();
-
-    if (!targetUid) {
-        alert("Could not identify the target user UID.");
-        return;
-    }
-
-    if (targetUid === uid) {
-        alert("You cannot hardware ban yourself.");
-        return;
-    }
-
-    try {
-        const userSnap = await get(ref(db, `users/${targetUid}`));
-        if (!userSnap.exists()) {
-            alert(`User profile for @${targetUsername} not found.`);
-            return;
-        }
-
-        const targetHwid = userSnap.val().hwid;
-        if (!targetHwid) {
-            alert(`User @${targetUsername} has no registered HWID.`);
-            return;
-        }
-
-        const banRef = ref(db, `hwBans/${targetHwid}`);
-        const banSnap = await get(banRef);
-
-        if (banSnap.exists()) {
-            const shouldUnban = confirm(`Device for @${targetUsername} is already hardware banned. Do you want to unban this device?`);
-            if (shouldUnban) {
-                await remove(banRef);
-                alert(`Device for @${targetUsername} has been unbanned.`);
-            }
-            return;
-        }
-
-        const reason = prompt(`Enter reason for hardware banning @${targetUsername}:`);
-        if (!reason) return;
-
-        await set(banRef, {
-            username: targetUsername,
-            reason: reason,
-            timestamp: Date.now(),
-            bannedBy: auth.currentUser.uid
-        });
-
-        alert(`Device for @${targetUsername} has been hardware banned.`);
-    } catch (err) {
-        console.error("HWID ban action failed:", err);
-        alert("An error occurred while attempting to hardware ban the user.");
-    }
 }
 
 
@@ -1977,17 +2008,25 @@ function addServerToSidebar(code, name) {
     nameEl.classList.add("serverName");
     nameEl.textContent = name;
 
+    const badgesContainer = document.createElement("div");
+    badgesContainer.classList.add("server-badges");
+
     const badgeEl = document.createElement("span");
     badgeEl.classList.add("unreadBadge");
     badgeEl.textContent = "0";
+    badgeEl.title = "Unread Messages"
     badgeEl.style.display = "none";
+
+    badgesContainer.appendChild(badgeEl);
 
     buttonEl.appendChild(hashEl);
     buttonEl.appendChild(nameEl);
 
     rowEl.appendChild(buttonEl);
-    rowEl.appendChild(badgeEl);
+    rowEl.appendChild(badgesContainer);
     serverListEl.appendChild(rowEl);
+
+    setupServerVoiceListener(code, rowEl);
 
     updateNoServersMessage();
 }
@@ -2804,13 +2843,13 @@ async function loadAllMembers(code) {
                 if (isOwner && isUserAdmin) {
                     li.innerHTML = `<span class="member-list-admin">${username}</span> <i class="fa-solid fa-circle-check admin-badge" title="Admin"></i> <span title="Server owner">👑</span>`;
                 } else if (isOwner && isUserOg) {
-                    li.innerHTML = `<span class="member-list-og">${username}</span> <span class="og-badge" title="Original Member">OG</span> <span title="Server owner">👑</span>`;
+                    li.innerHTML = `<span class="member-list-og">${username}</span> <span class="og-badge" title="Here from the start">OG</span> <span title="Server owner">👑</span>`;
                 } else if (isOwner) {
                     li.innerHTML = `${username} <span title="Server owner">👑</span>`;
                 } else if (isUserAdmin) {
                     li.innerHTML = `<span class="member-list-admin">${username}</span> <i class="fa-solid fa-circle-check admin-badge" title="Admin"></i>`;
                 } else if (isUserOg) {
-                    li.innerHTML = `<span class="member-list-og">${username}</span> <span class="og-badge" title="Original Member">OG</span>`;
+                    li.innerHTML = `<span class="member-list-og">${username}</span> <span class="og-badge" title="Here from the start">OG</span>`;
                 } else {
                     li.textContent = username;
                 }
@@ -2970,6 +3009,7 @@ const peerConnections = {};
 const iceCandidateQueues = {};
 const processedCandidates = {}; 
 const activeAnalysers = {};
+const serverVoiceListeners = {};
 
 let rtcConfig = null;
 let globalAudioCtx = null;
@@ -3017,6 +3057,9 @@ async function joinVoiceChat(serverCode) {
         console.error("[VoiceChat] Cannot join voice chat: UID is undefined.");
         return;
     }
+
+    document.querySelectorAll(".screen-share-card").forEach(card => card.remove());
+    window.activeScreenStream = null;
 
     if (voiceHeaderNameEl) {
         const serverName = serverCode === "public" ? "Public" : (myServers.find(s => s.code === serverCode)?.name || serverCode);
@@ -3093,9 +3136,25 @@ async function joinVoiceChat(serverCode) {
     setupSpeakingIndicator(localAudioStream, uid);
 
     listenToVoiceUsers(serverCode);
+
+    if (screenShareListenerUnsub) screenShareListenerUnsub();
+    const screenShareRef = ref(db, `servers/${serverCode}/voiceScreenShare`);
+    screenShareListenerUnsub = onValue(screenShareRef, (snapshot) => {
+        if (!snapshot.exists()) {
+            document.querySelectorAll(".screen-share-card").forEach(card => card.remove());
+        } else {
+            const data = snapshot.val();
+            if (!data || !data.uid) {
+                document.querySelectorAll(".screen-share-card").forEach(card => card.remove());
+            }
+        }
+    });
 }
 
 async function leaveVoiceChat(serverCode, myUid) {
+    leaveVc.currentTime = 0;
+    leaveVc.play().catch(err => console.warn("Leave audio blocked:", err));
+
     if (typeof serverCode !== "string") {
         serverCode = currentVoiceServer;
     }
@@ -3105,6 +3164,23 @@ async function leaveVoiceChat(serverCode, myUid) {
 
     const activeServer = serverCode || currentVoiceServer;
     const activeUid = myUid || uid;
+
+    if (window.activeScreenStream) {
+        window.activeScreenStream.getTracks().forEach(track => track.stop());
+        window.activeScreenStream = null;
+    }
+
+    if (voiceShareBtnEl) {
+        voiceShareBtnEl.classList.remove("sharing");
+    }
+
+    if (activeServer) {
+        const screenShareRef = ref(db, `servers/${activeServer}/voiceScreenShare`);
+        const snap = await get(screenShareRef);
+        if (snap.exists() && snap.val().uid === activeUid) {
+            await remove(screenShareRef, writeOptions());
+        }
+    }
 
     if (voiceUsersUnsub) {
         voiceUsersUnsub();
@@ -3130,6 +3206,13 @@ async function leaveVoiceChat(serverCode, myUid) {
         localAudioStream.getTracks().forEach((track) => track.stop());
         localAudioStream = null;
     }
+
+    if (screenShareListenerUnsub) {
+        screenShareListenerUnsub();
+        screenShareListenerUnsub = null;
+    }
+
+    document.querySelectorAll(".screen-share-card").forEach(card => card.remove());
 
     if (activeServer && activeUid) {
         try {
@@ -3188,10 +3271,30 @@ function listenToVoiceUsers(serverCode) {
         if (!gridEl) return;
 
         gridEl.innerHTML = "";
-        if (!snapshot.exists()) return;
+        if (!snapshot.exists()) {
+            lastVoiceUsers = [];
+            return;
+        }
 
         const users = snapshot.val();
         const activeUids = Object.keys(users);
+
+        if (lastVoiceUsers.length > 0) {
+            const joined = activeUids.filter(u => !lastVoiceUsers.includes(u));
+            const left = lastVoiceUsers.filter(u => !activeUids.includes(u));
+
+            if (joined.length > 0) {
+                joinVc.currentTime = 0;
+                joinVc.play().catch(err => console.warn("Join audio blocked:", err));
+            }
+
+            if (left.length > 0) {
+                leaveVc.currentTime = 0;
+                leaveVc.play().catch(err => console.warn("Leave audio blocked:", err));
+            }
+        }
+
+        lastVoiceUsers = [...activeUids];
 
         Object.keys(peerConnections).forEach((remoteUid) => {
             if (!activeUids.includes(remoteUid)) {
@@ -3230,6 +3333,10 @@ function listenToVoiceUsers(serverCode) {
 
             gridEl.appendChild(card);
         });
+
+        if (window.activeScreenStream && currentVoiceServer === serverCode) {
+            renderScreenCard(window.activeScreenStream, uid, username || "User");
+        }
     });
 }
 
@@ -3243,19 +3350,44 @@ function createPeerConnection(remoteUid, isInitiator, serverCode) {
         });
     }
 
-    pc.ontrack = (event) => {
-        let audioEl = document.getElementById(`audio-${remoteUid}`);
-        if (!audioEl) {
-            audioEl = document.createElement("audio");
-            audioEl.id = `audio-${remoteUid}`;
-            audioEl.autoplay = true;
-            audioEl.playsInline = true; 
-            document.body.appendChild(audioEl);
-        }
-        audioEl.srcObject = event.streams[0];
-        audioEl.play().catch((err) => console.warn("Autoplay blocked:", err));
+    if (window.activeScreenStream) {
+        window.activeScreenStream.getTracks().forEach((track) => {
+            pc.addTrack(track, window.activeScreenStream);
+        });
+    }
 
-        setupSpeakingIndicator(event.streams[0], remoteUid);
+    pc.ontrack = (event) => {
+        const stream = event.streams[0];
+        const track = event.track;
+
+        if (track.kind === "audio") {
+            let audioEl = document.getElementById(`audio-${remoteUid}`);
+            if (!audioEl) {
+                audioEl = document.createElement("audio");
+                audioEl.id = `audio-${remoteUid}`;
+                audioEl.autoplay = true;
+                audioEl.playsInline = true;
+                document.body.appendChild(audioEl);
+            }
+            audioEl.srcObject = stream;
+            audioEl.play().catch((err) => console.warn("Audio autoplay blocked:", err));
+
+            setupSpeakingIndicator(stream, remoteUid);
+        } else if (track.kind === "video") {
+            console.log(`[ScreenShare] Receiving screen share video from ${remoteUid}`);
+            
+            const profile = getProfile(remoteUid);
+            const authorName = profile.username && profile.username !== "Loading..." ? profile.username : "Member";
+
+            renderScreenCard(stream, remoteUid, authorName);
+
+            track.onended = () => {
+                if (remoteUid !== uid) {
+                    const card = document.getElementById(`screen-card-${remoteUid}`);
+                    if (card) card.remove();
+                }
+            };
+        }
     };
 
     pc.onicecandidate = (event) => {
@@ -3314,8 +3446,10 @@ function listenForSignals(serverCode, remoteUid, pc) {
 
         const offerData = snapshot.val();
         if (offerData) {
-            if (pc.signalingState !== "stable" && pc.signalingState !== "have-local-offer") return;
-            if (pc.currentRemoteDescription) return;
+            if (pc.signalingState !== "stable" && pc.signalingState !== "have-local-offer") {
+                console.warn(`[WebRTC] Ignored offer in state: ${pc.signalingState}`);
+                return;
+            }
 
             try {
                 await pc.setRemoteDescription(new RTCSessionDescription(offerData));
@@ -3330,8 +3464,20 @@ function listenForSignals(serverCode, remoteUid, pc) {
                     type: pc.localDescription.type,
                     fromUid: uid
                 });
+
+                if (window.activeScreenStream && pc.signalingState === "stable") {
+                    const reOffer = await pc.createOffer();
+                    await pc.setLocalDescription(reOffer);
+
+                    const reOfferRef = ref(db, `servers/${serverCode}/signal/${remoteUid}/${uid}/offers`);
+                    push(reOfferRef, {
+                        sdp: pc.localDescription.sdp,
+                        type: pc.localDescription.type,
+                        fromUid: uid
+                    });
+                }
             } catch (err) {
-                console.warn("[WebRTC] Offer processing error:", err);
+                console.warn("[WebRTC] Offer/Re-offer processing error:", err);
             }
         }
     });
@@ -3342,13 +3488,16 @@ function listenForSignals(serverCode, remoteUid, pc) {
 
         const answerData = snapshot.val();
         if (answerData) {
-            if (pc.signalingState !== "have-local-offer") return;
+            if (pc.signalingState !== "have-local-offer") {
+                console.warn(`[WebRTC] Ignored answer in unexpected state: ${pc.signalingState}`);
+                return;
+            }
 
             try {
                 await pc.setRemoteDescription(new RTCSessionDescription(answerData));
                 await processQueuedCandidates(pc, remoteUid);
             } catch (err) {
-                console.warn("[WebRTC] Answer processing error:", err);
+                console.warn("[WebRTC] Answer processing error (m-line or state collision):", err);
             }
         }
     });
@@ -3408,6 +3557,11 @@ function cleanupPeerConnection(targetUid) {
     if (audioEl) {
         audioEl.srcObject = null;
         audioEl.remove();
+    }
+
+    const screenCard = document.getElementById(`screen-card-${targetUid}`);
+    if (screenCard) {
+        screenCard.remove();
     }
 }
 
@@ -3477,6 +3631,123 @@ function updateSpeakingIndicators() {
 }
 
 requestAnimationFrame(updateSpeakingIndicators);
+
+function setupServerVoiceListener(serverCode, rowEl) {
+    if (serverCode === "public" || serverCode === "announcements" || serverCode === "system") return;
+
+    let badgesContainer = rowEl.querySelector(".server-badges");
+    if (!badgesContainer) {
+        badgesContainer = document.createElement("div");
+        badgesContainer.className = "server-badges";
+        rowEl.appendChild(badgesContainer);
+    }
+
+    let vcBadge = badgesContainer.querySelector(".live-vc-badge");
+    if (!vcBadge) {
+        vcBadge = document.createElement("div");
+        vcBadge.className = "live-vc-badge";
+        vcBadge.textContent = "LIVE VC";
+        vcBadge.style.display = "none";
+        badgesContainer.appendChild(vcBadge);
+    }
+
+    const voiceRef = ref(db, `servers/${serverCode}/voice`);
+
+    if (serverVoiceListeners[serverCode]) {
+        serverVoiceListeners[serverCode]();
+    }
+
+    const unsubscribe = onValue(voiceRef, async (snapshot) => {
+        if (!snapshot.exists()) {
+            vcBadge.style.display = "none";
+            return;
+        }
+
+        const users = snapshot.val();
+        const participantUids = Object.keys(users);
+
+        if (uid && users[uid]) {
+            vcBadge.style.display = "none";
+            return;
+        }
+
+        if (participantUids.length === 0) {
+            vcBadge.style.display = "none";
+            return;
+        }
+
+        const usernames = [];
+        for (const pUid of participantUids) {
+            const profile = getProfile(pUid);
+            usernames.push(profile.username && profile.username !== "Loading..." ? profile.username : "Member");
+        }
+
+        vcBadge.title = `In VC: ${usernames.join(", ")}`;
+        vcBadge.style.display = "inline-flex";
+    });
+
+    serverVoiceListeners[serverCode] = unsubscribe;
+}
+
+
+// SCREENSHARE
+async function stopScreenShare() {
+    if (!currentVoiceServer) return;
+
+    const screenShareRef = ref(db, `servers/${currentVoiceServer}/voiceScreenShare`);
+    await remove(screenShareRef, writeOptions());
+
+    if (window.activeScreenStream) {
+        window.activeScreenStream.getTracks().forEach(track => track.stop());
+        window.activeScreenStream = null;
+    }
+
+    const localScreenCard = document.getElementById(`screen-card-${uid}`);
+    if (localScreenCard) {
+        localScreenCard.remove();
+    }
+
+    if (voiceShareBtnEl) {
+        voiceShareBtnEl.classList.remove("sharing");
+    }
+    
+    console.log("[ScreenShare] Stopped sharing manually.");
+}
+
+function renderScreenCard(stream, ownerUid, ownerName) {
+    const gridEl = document.querySelector(".voice-grid");
+    if (!gridEl) return;
+
+    if (!stream || !stream.getVideoTracks || stream.getVideoTracks().length === 0 || !stream.getVideoTracks()[0].enabled) {
+        const existingCard = document.getElementById(`screen-card-${ownerUid}`);
+        if (existingCard) existingCard.remove();
+        return;
+    }
+
+    let screenCardId = `screen-card-${ownerUid}`;
+    let card = document.getElementById(screenCardId);
+
+    if (!card) {
+        card = document.createElement("div");
+        card.className = "voice-card screen-share-card";
+        card.id = screenCardId;
+
+        card.innerHTML = `
+            <video autoplay playsinline muted class="screen-share-video" id="video-${ownerUid}"></video>
+            <div class="voiceUsername">
+                <span>${ownerName}'s Screen</span>
+            </div>
+        `;
+        gridEl.appendChild(card);
+    }
+
+    const videoEl = document.getElementById(`video-${ownerUid}`);
+    if (videoEl) {
+        videoEl.srcObject = stream;
+        if (ownerUid === uid) videoEl.muted = true;
+        videoEl.play().catch(err => console.warn("Video autoplay blocked:", err));
+    }
+}
 
 
 // SETTINGS
@@ -3648,7 +3919,7 @@ function setupNotificationListener(serverId) {
                 const badge = row.querySelector(".unreadBadge");
                 if (badge && appSettings.unreadBadge) {
                     badge.textContent = unreadCounts[serverId];
-                    badge.style.display = "inline-block";
+                    badge.style.display = "flex";
                 }
             }
 
@@ -3711,10 +3982,6 @@ async function showMessageContextMenu(e, msg) {
     if (msgContextCopy) msgContextCopy.style.display = "block";
     if (msgContextDm) msgContextDm.style.display = "block";
     if (msgContextReport) msgContextReport.style.display = "block";
-
-    if (msgContextHwBan) {
-        msgContextHwBan.style.display = canModerate ? "block" : "none";
-    }
 
     if (msgContextGetUid) {
         msgContextGetUid.style.display = canModerate ? "block" : "none";

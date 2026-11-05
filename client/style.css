@@ -249,6 +249,7 @@ a {
     cursor: pointer;
     padding: 5px 8px;
     border-radius: 6px;
+    height: 30px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -258,7 +259,6 @@ a {
 
 #chatHeaderActions button:hover {
     color: #ddd9d9;
-    background-color: #222327;
 }
 
 #chatHeaderActions button svg {
@@ -589,16 +589,40 @@ a {
     color: #ffffff;
 }
 
+.server-badges {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+    padding-right: 8px;
+}
+
 .unreadBadge {
-    background: #96979e;
+    background: #ff0044;
     font-family: 'DM Sans', sans-serif;
     font-weight: 600;
-    color: #121214;
-    padding: 2px 6px;
+    color: #fff;
+    width: 20px;       
+    height: 20px;
     border-radius: 10px;
     font-size: 12px;
-    pointer-events: none;
     display: none;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.live-vc-badge {
+    display: none;
+    align-items: center;
+    background: #ff0044;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 3px 6px;
+    border-radius: 4px;
+    letter-spacing: 0.5px;
+    cursor: pointer;
 }
 
 .serverHash {
@@ -1097,12 +1121,10 @@ a {
 }
 
 .danger {
-    color: #e57573 !important;
+    color: #f2555a !important;
 }
 
-.danger:hover {
-    background-color: #34282d !important;
-}
+
 
 @keyframes pop {
   0% {
@@ -1262,38 +1284,6 @@ a {
     overflow: hidden;
 }
 
-#voiceBackBtn {
-    font-size: 1rem;
-    border: none;
-    background: none;
-    color: #96979e;
-    cursor: pointer;
-    font-family: "DM Sans", sans-serif;
-    margin: 0;
-    padding: 5px 8px;
-}
-
-#voiceBackBtn:hover {
-    color: white;
-}
-
-#voiceMuteBtn {
-    margin: 0;
-    margin-left: 20px;
-    font-size: 1rem;
-    border: none;
-    background: none;
-    color: #96979e;
-    cursor: pointer;
-    padding: 8px 10px !important;
-    border-radius: 5px;
-}
-
-#voiceMuteBtn:hover {
-    background-color: #222327;
-    color: #fff;
-}
-
 .voice-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(320px, 550px));
@@ -1327,6 +1317,24 @@ a {
     transition: transform 0.2s ease, border-color 0.2s ease;
 }
 
+.voice-card.screen-share-card {
+    position: relative;
+    padding: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    background: #000;
+}
+
+.screen-share-video {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    flex-grow: 1;
+}
+
 .voice-grid:has(.voice-card:only-child) {
     grid-template-columns: minmax(400px, 700px);
 }
@@ -1347,7 +1355,8 @@ a {
     font-size: 0.95rem;
     font-weight: 500;
     color: #dbdee1;
-    background-color: rgba(18, 18, 20, 0.65);
+    background: rgba(10, 10, 10, 0.6);
+    backdrop-filter: blur(4px);
     padding: 4px 8px;
     border-radius: 4px;
     max-width: calc(100% - 24px);
@@ -1465,8 +1474,8 @@ a {
     top: 0;
     left: 0;
     width: 100vw;
+    background: linear-gradient(to top, #000000 0%, #121214 40%, #121214 100%);
     height: 100vh;
-    background-color: #121214;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1479,7 +1488,7 @@ a {
     padding: 32px;
     border-radius: 12px;
     width: 100%;
-    max-width: 440px;
+    max-width: 400px;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
     box-sizing: border-box;
     font-family: 'DM Sans', sans-serif;
