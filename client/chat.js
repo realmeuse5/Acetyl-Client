@@ -1518,7 +1518,7 @@ async function toggleKickUser(serverId, targetUid, targetUsername) {
         await Promise.all([
             remove(ref(db, `servers/${serverId}/members/${targetUid}`), writeOptions()),
             remove(ref(db, `servers/${serverId}/activeUsers/${targetUid}`), writeOptions()),
-            remove(ref(db, `users/${targetUid}/joinedServers/${serverId}`), writeOptions()) // <-- Added this to clear joinedServers
+            remove(ref(db, `users/${targetUid}/joinedServers/${serverId}`), writeOptions())
         ]);
 
         await sendBotMessage(serverId, `👋 See you later! @${targetUsername} was kicked from the server.`);
@@ -1885,7 +1885,6 @@ async function createServer() {
 
     const code = Math.random().toString(36).substring(2, 8);
 
-    // 1. Create server metadata & membership
     await set(ref(db, `servers/${code}`), {
         name,
         createdBy: uid,
@@ -1894,7 +1893,6 @@ async function createServer() {
 
     await set(ref(db, `servers/${code}/members/${uid}`), true, writeOptions());
 
-    // 2. Save to user's joined servers list in Firebase
     await set(ref(db, `users/${uid}/joinedServers/${code}`), true, writeOptions());
 
     addServerToSidebar(code, name);
@@ -1942,7 +1940,6 @@ async function joinServer() {
 
     let name = snapshot.val().name || `Server ${code}`;
     
-    // UPDATE BOTH PATHS:
     await Promise.all([
         set(ref(db, `servers/${code}/members/${uid}`), true, writeOptions()),
         set(ref(db, `users/${uid}/joinedServers/${code}`), true, writeOptions())
@@ -2154,7 +2151,6 @@ async function sendMessage() {
 
     const dm = parseDM(text);
 
-    // Validation
     if (!text && !file) return;
     if (text && text.length > 1000) return;
 
