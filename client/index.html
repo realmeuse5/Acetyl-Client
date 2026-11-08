@@ -10,6 +10,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cal+Sans&family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&display=swap" rel="stylesheet">
     <link rel="icon" type="image/svg+xml" href="./assets/favicon.svg">
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 </head>
 <body>
 
@@ -31,6 +32,8 @@
                         <label for="login-password">Password</label>
                         <input type="password" id="login-password" required autocomplete="current-password">
                     </div>
+
+                    <div class="cf-turnstile" data-sitekey="3x00000000000000000000FF" data-theme="dark"></div>
 
                     <button type="submit" id="login-submit-btn">Log In</button>
                 </form>
@@ -60,6 +63,8 @@
                         <label for="signup-password">Password</label>
                         <input type="password" id="signup-password" required autocomplete="new-password">
                     </div>
+
+                    <div class="cf-turnstile" data-sitekey="3x00000000000000000000FF" data-theme="dark"></div>
 
                     <button type="submit" id="signup-submit-btn">Sign Up</button>
                 </form>
@@ -117,7 +122,11 @@
     
     <div id="loadingScreen">
         <img src="/client/assets/favicon.svg">
-        <p>Loading Acetyl Client...</p>
+        <div id="loadingAnimation">
+            <div class="dot"></div>
+            <div class="dot"></div>
+            <div class="dot"></div>
+        </div>
     </div>
 
     <div id="webContainer">

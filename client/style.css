@@ -170,15 +170,51 @@ a {
     pointer-events: none;
 }
 
-#loadingScreen p {
-    font-size: 1rem;
-    color: #96979e;
-    font-family: 'DM Sans', sans-serif;
-}
-
 #loadingScreen img {
     width: 64px;
     height: 64px;
+    animation: logoHover 2.5s ease-in-out infinite;
+}
+
+@keyframes logoHover {
+    0%, 100% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(-8px);
+    }
+}
+
+#loadingAnimation {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 24px;
+    height: 12px;
+}
+
+#loadingAnimation .dot {
+    width: 8px;
+    height: 8px;
+    background-color: #96979e;
+    border-radius: 50%;
+    animation: materialBounce 1.4s infinite ease-in-out both;
+}
+
+#loadingAnimation .dot:nth-child(1) { animation-delay: -0.32s; }
+#loadingAnimation .dot:nth-child(2) { animation-delay: -0.16s; }
+#loadingAnimation .dot:nth-child(3) { animation-delay: 0s; }
+
+@keyframes materialBounce {
+    0%, 80%, 100% {
+        transform: scale(0);
+        opacity: 0;
+    }
+    40% {
+        transform: scale(1.0);
+        opacity: 1;
+    }
 }
 
 #sidebar {
@@ -1345,7 +1381,6 @@ a {
 
 .voice-card.speaking {
     border: 2px solid #434347;
-    box-shadow: 0 0 15px rgba(80, 80, 80, 0.3);
 }
 
 .voiceUsername {
@@ -1488,7 +1523,7 @@ a {
     padding: 32px;
     border-radius: 12px;
     width: 100%;
-    max-width: 400px;
+    max-width: 420px;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
     box-sizing: border-box;
     font-family: 'DM Sans', sans-serif;
@@ -1533,6 +1568,11 @@ a {
     margin-bottom: 15px;
 }
 
+.cf-turnstile {
+    display: flex;
+    justify-content: center;
+}
+
 .input-group {
     margin-bottom: 16px;
     position: relative;
@@ -1551,13 +1591,13 @@ a {
     width: 100%;
     padding: 10px 12px;
     background-color: #121214;
-    border: 1px solid transparent;
+    border: 1px solid #29292d;
     border-radius: 8px;
     color: #fff;
     font-size: 1rem;
     box-sizing: border-box;
     outline: none;
-    font-family: 'DM Sans', sans-serif;
+    font-family: sans-serif;
 }
 
 #login-submit-btn {

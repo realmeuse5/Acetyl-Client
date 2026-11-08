@@ -3,7 +3,7 @@ import { db, auth, noAuthMode, initAuthMode } from "./firebase-init.js";
 import { 
     ref, push, onChildAdded, onChildRemoved, onChildChanged, 
     remove, get, child, set, onDisconnect, onValue,
-    serverTimestamp, query, orderByChild
+    serverTimestamp, query, orderByChild, runTransaction
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 import { 
     createUserWithEmailAndPassword, 
@@ -50,6 +50,18 @@ let currentVoiceServer = null;
 let voiceUsersUnsub = null;
 let localAudioStream = null;
 let signalUnsub = null;
+let voiceSessionId = null;
+let activeVoiceUids = new Set();
+let activeScreenShare = null;
+let screenShareSessions = {};
+let screenShareLock = null;
+let screenShareSessionsUnsub = null;
+let screenShareLockUnsub = null;
+const remoteScreenTracks = {};
+let voiceUsersData = {};
+let screenShareStarting = false;
+let healingShareRecords = false;
+let voiceOpChain = Promise.resolve();
 let vcMuted = false;
 let currentVoiceMsgKey = null;
 let views;
@@ -59,7 +71,6 @@ let muteUnsub = null;
 let lastUploadTimestamp = 0;
 let isHandlingSignup = false;
 let lastVoiceUsers = [];
-let screenShareListenerUnsub = null;
 
 
 // UI ELEMENTS
@@ -819,94 +830,16 @@ function attachUIListeners() {
                     username: username || "Anonymous",
                     joinedAt: serverTimestamp(),
                     vcMuted: vcMuted,
-                    msgKey: currentVoiceMsgKey
-                });
+                    msgKey: currentVoiceMsgKey,
+                    voiceSessionId: voiceSessionId
+                }, writeOptions());
             }
         });
     }
 
     if (voiceShareBtnEl) {
         voiceShareBtnEl.addEventListener("click", async () => {
-            if (!currentVoiceServer || !uid) return;
-
-            const screenShareRef = ref(db, `servers/${currentVoiceServer}/voiceScreenShare`);
-            const snap = await get(screenShareRef);
-
-            if (snap.exists()) {
-                const sharingData = snap.val();
-                if (sharingData.uid !== uid) {
-                    alert(`Someone is already screen sharing in this server. Only one user can screen share at a time.`);
-                    return;
-                } else {
-                    await stopScreenShare();
-                    return;
-                }
-            }
-
-            try {
-                const screenStream = await navigator.mediaDevices.getDisplayMedia({
-                    video: { cursor: "always" },
-                    audio: false
-                });
-
-                window.activeScreenStream = screenStream;
-                const videoTrack = screenStream.getVideoTracks()[0];
-
-                await set(screenShareRef, {
-                    uid: uid,
-                    username: username || "User"
-                }, writeOptions());
-
-                onDisconnect(screenShareRef).remove(writeOptions());
-
-                renderScreenCard(screenStream, uid, username || "User");
-
-                const senders = [];
-                for (const [remoteUid, pc] of Object.entries(peerConnections)) {
-                    const sender = pc.addTrack(videoTrack, screenStream);
-                    senders.push({ pc, sender });
-
-                    try {
-                        const offer = await pc.createOffer();
-                        await pc.setLocalDescription(offer);
-                        
-                        const offerRef = ref(db, `servers/${currentVoiceServer}/signal/${remoteUid}/${uid}/offers`);
-                        push(offerRef, {
-                            sdp: pc.localDescription.sdp,
-                            type: pc.localDescription.type,
-                            fromUid: uid
-                        });
-                    } catch (err) {
-                        console.error("[ScreenShare] Error re-negotiating offer for track:", err);
-                    }
-                }
-
-                videoTrack.onended = async () => {
-                    screenStream.getTracks().forEach(track => track.stop());
-                    
-                    for (const { pc, sender } of senders) {
-                        try {
-                            pc.removeTrack(sender);
-                        } catch (err) {
-                            console.warn("[ScreenShare] Error removing track from PC:", err);
-                        }
-                    }
-
-                    const localCard = document.getElementById(`screen-card-${uid}`);
-                    if (localCard) localCard.remove();
-
-                    await remove(screenShareRef, writeOptions());
-                    voiceShareBtnEl.classList.remove("sharing");
-                    window.activeScreenStream = null;
-                    console.log("[ScreenShare] Stopped sharing via browser control.");
-                };
-
-                voiceShareBtnEl.classList.add("sharing");
-                console.log("[ScreenShare] Successfully capturing and rendering preview.");
-
-            } catch (err) {
-                console.error("[ScreenShare] User cancelled or failed to get display media:", err);
-            }
+            await toggleScreenShare();
         });
     }
 
@@ -1450,6 +1383,50 @@ async function checkDeviceBan(currentUser) {
     return false;
 }
 
+async function generateHWID() {
+    let renderer = "unknown";
+    try {
+        const canvas = document.createElement('canvas');
+        const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+        if (gl) {
+            const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+            if (debugInfo) {
+                renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) || gl.getParameter(37446);
+            }
+        }
+    } catch (e) {
+    }
+
+    const signals = [
+        screen.width + "x" + screen.height,
+        screen.colorDepth,                        
+        renderer,
+        navigator.hardwareConcurrency || "unknown",
+        navigator.deviceMemory || "unknown",     
+        Intl.DateTimeFormat().resolvedOptions().timeZone
+    ].join("|||");
+
+    if (window.crypto && window.crypto.subtle) {
+        const msgBuffer = new TextEncoder().encode(signals);
+        const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        const hwid = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        console.log("Generated HWID SHA-256 Hash:", hwid);
+        return hwid;
+    } else {
+        console.warn("crypto.subtle unavailable on insecure IP.");
+        let hash = 0;
+        for (let i = 0; i < signals.length; i++) {
+            const char = signals.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash |= 0; 
+        }
+        const fallbackHwid = "insecure_net_" + Math.abs(hash).toString(16);
+        console.log("Generated HWID Fallback Hash:", fallbackHwid);
+        return fallbackHwid;
+    }
+}
+
 
 // MUTE STATUS
 function listenToMuteStatus() {
@@ -1816,7 +1793,11 @@ async function switchServer(serverId) {
     });
 
     if (currentVoiceServer === serverId) {
-        joinVoiceChat(serverId);
+        switchView("voice");
+
+        if (rightSidebarEl) {
+            rightSidebarEl.style.display = "none";
+        }
     } else {
         switchView("chat");
     }
@@ -1937,6 +1918,11 @@ async function joinServer() {
         await set(ref(db, `users/${uid}/joinedServers/system`), true, writeOptions());
         addServerToSidebar("system", "System");
         switchServer("system");
+        return;
+    }
+
+    if (code == "public") {
+        switchServer("public");
         return;
     }
 
@@ -2071,7 +2057,6 @@ async function leaveServer(code) {
     if (isOwner) {
         await remove(ref(db, `servers/${code}`), writeOptions());
     } else {
-        // REMOVE FROM BOTH PATHS:
         await Promise.all([
             remove(ref(db, `servers/${code}/activeUsers/${uid}`), writeOptions()),
             remove(ref(db, `servers/${code}/members/${uid}`), writeOptions()),
@@ -2873,11 +2858,11 @@ async function loadAllMembers(code) {
 
                 const li = document.createElement("li");
                 li.textContent = targetUsername;
-                li.style.color = "#e57573";
+                li.style.color = "#c4c5cc";
 
                 if (canManageKicks) {
                     li.style.cursor = "pointer";
-                    li.title = "Click to unkick user";
+                    li.title = "Unkick User";
                     li.addEventListener("click", async () => {
                         await toggleKickUser(code, targetUid, targetUsername);
                     });
@@ -3006,13 +2991,38 @@ async function handlePfpUpload(file) {
 
 // VOICECHAT
 const peerConnections = {};
-const iceCandidateQueues = {};
-const processedCandidates = {}; 
 const activeAnalysers = {};
 const serverVoiceListeners = {};
 
 let rtcConfig = null;
 let globalAudioCtx = null;
+
+function createSessionId() {
+    if (crypto.randomUUID) {
+        return crypto.randomUUID();
+    }
+
+    return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+}
+
+function createPeerConnectionId(remoteUid, remoteSessionId) {
+    const participants = [
+        {
+            uid: uid,
+            sessionId: voiceSessionId
+        },
+        {
+            uid: remoteUid,
+            sessionId: remoteSessionId || "legacy"
+        }
+    ];
+
+    participants.sort((a, b) => a.uid.localeCompare(b.uid));
+
+    return participants
+        .map(participant => `${participant.uid}:${participant.sessionId}`)
+        .join("__");
+}
 
 async function getRtcConfig() {
     try {
@@ -3048,40 +3058,63 @@ async function getRtcConfig() {
     }
 }
 
-async function joinVoiceChat(serverCode) {
+function runVoiceOp(task) {
+    const run = voiceOpChain.then(task, task);
+    voiceOpChain = run.catch(() => {});
+    return run;
+}
+
+function joinVoiceChat(serverCode) {
+    return runVoiceOp(() => _joinVoiceChat(serverCode));
+}
+
+function leaveVoiceChat(serverCode, myUid) {
+    return runVoiceOp(() => _leaveVoiceChat(serverCode, myUid));
+}
+
+async function _joinVoiceChat(serverCode) {
     if (!uid) {
         uid = auth?.currentUser?.uid || window.uid;
     }
-    
+
     if (!uid) {
-        console.error("[VoiceChat] Cannot join voice chat: UID is undefined.");
+        console.error("[VoiceChat] Cannot join: UID is undefined.");
         return;
     }
 
-    document.querySelectorAll(".screen-share-card").forEach(card => card.remove());
-    window.activeScreenStream = null;
+    if (currentVoiceServer === serverCode) {
+        return;
+    }
+
+    if (currentVoiceServer) {
+        await _leaveVoiceChat(currentVoiceServer, uid);
+    }
 
     if (voiceHeaderNameEl) {
-        const serverName = serverCode === "public" ? "Public" : (myServers.find(s => s.code === serverCode)?.name || serverCode);
+        const serverName = serverCode === "public"
+            ? "Public"
+            : (myServers.find(s => s.code === serverCode)?.name || serverCode);
+
         voiceHeaderNameEl.textContent = serverName;
     }
 
     try {
-        const voiceSnapshot = await get(ref(db, `servers/${serverCode}/voice`));
+        const voiceSnapshot = await get(
+            ref(db, `servers/${serverCode}/voice`)
+        );
+
         if (voiceSnapshot.exists()) {
             const users = voiceSnapshot.val();
             const userCount = Object.keys(users).length;
+
             if (!users[uid] && userCount >= 6) {
-                alert("This voice channel is full (maximum 6 people).");
+                alert("This voice chat is full (maximum 6 people).");
                 return;
             }
         }
     } catch (err) {
-        console.error("Error checking voice channel participant limit:", err);
-    }
-
-    if (currentVoiceServer && currentVoiceServer !== serverCode) {
-        await leaveVoiceChat(currentVoiceServer, uid);
+        console.error("[VoiceChat] Participant limit check failed:", err);
+        return;
     }
 
     const config = await getRtcConfig();
@@ -3092,72 +3125,79 @@ async function joinVoiceChat(serverCode) {
     }
 
     const audioSuccess = await initLocalAudio();
+
     if (!audioSuccess) return;
 
     currentVoiceServer = serverCode;
+    voiceSessionId = createSessionId();
+    lastVoiceUsers = [];
+    activeVoiceUids.clear();
     updateServerVoiceIcons();
-
-    try {
-        await remove(ref(db, `servers/${serverCode}/signal/${uid}`));
-    } catch (err) {
-        console.warn("[VoiceChat] Signal inbox clear warning:", err);
-    }
-
     switchView("voice");
 
-    const voiceUserRef = ref(db, `servers/${serverCode}/voice/${uid}`);
+    const voiceUserRef = ref(
+        db,
+        `servers/${serverCode}/voice/${uid}`
+    );
+
     const existingSnap = await get(voiceUserRef);
 
     if (existingSnap.exists() && existingSnap.val().msgKey) {
         currentVoiceMsgKey = existingSnap.val().msgKey;
     } else {
-        const botMsgRef = await sendBotMessage(serverCode, `🔊 @${username} is currently in voice chat`, {
-            type: "JOIN_VOICE",
-            serverCode: serverCode
-        });
+        const botMsgRef = await sendBotMessage(
+            serverCode,
+            `🔊 @${username} is currently in voice chat`,
+            {
+                type: "JOIN_VOICE",
+                serverCode: serverCode
+            }
+        );
+
         currentVoiceMsgKey = botMsgRef ? botMsgRef.key : null;
     }
 
     await set(voiceUserRef, {
         username: username,
         joinedAt: serverTimestamp(),
-        vcMuted: false,
-        msgKey: currentVoiceMsgKey
+        vcMuted: vcMuted,
+        msgKey: currentVoiceMsgKey,
+        voiceSessionId: voiceSessionId
     });
 
     onDisconnect(voiceUserRef).remove(writeOptions());
+
     if (currentVoiceMsgKey) {
-        const botMsgRef = ref(db, `servers/${serverCode}/messages/${currentVoiceMsgKey}`);
+        const botMsgRef = ref(
+            db,
+            `servers/${serverCode}/messages/${currentVoiceMsgKey}`
+        );
+
         onDisconnect(botMsgRef).remove(writeOptions());
     }
 
-    rightSidebarEl.style.display = 'none';
-
+    rightSidebarEl.style.display = "none";
     setupSpeakingIndicator(localAudioStream, uid);
-
     listenToVoiceUsers(serverCode);
+    listenForScreenShares(serverCode);
+    sweepOwnStaleScreenShare(serverCode);
 
-    if (screenShareListenerUnsub) screenShareListenerUnsub();
-    const screenShareRef = ref(db, `servers/${serverCode}/voiceScreenShare`);
-    screenShareListenerUnsub = onValue(screenShareRef, (snapshot) => {
-        if (!snapshot.exists()) {
-            document.querySelectorAll(".screen-share-card").forEach(card => card.remove());
-        } else {
-            const data = snapshot.val();
-            if (!data || !data.uid) {
-                document.querySelectorAll(".screen-share-card").forEach(card => card.remove());
-            }
-        }
-    });
+    console.log(
+        `[VoiceChat] Joined ${serverCode}. Session: ${voiceSessionId}`
+    );
 }
 
-async function leaveVoiceChat(serverCode, myUid) {
+async function _leaveVoiceChat(serverCode, myUid) {
     leaveVc.currentTime = 0;
-    leaveVc.play().catch(err => console.warn("Leave audio blocked:", err));
+
+    leaveVc.play().catch(err =>
+        console.warn("Leave audio blocked:", err)
+    );
 
     if (typeof serverCode !== "string") {
         serverCode = currentVoiceServer;
     }
+
     if (typeof myUid !== "string") {
         myUid = uid;
     }
@@ -3165,21 +3205,10 @@ async function leaveVoiceChat(serverCode, myUid) {
     const activeServer = serverCode || currentVoiceServer;
     const activeUid = myUid || uid;
 
-    if (window.activeScreenStream) {
-        window.activeScreenStream.getTracks().forEach(track => track.stop());
-        window.activeScreenStream = null;
-    }
+    if (!activeServer) return;
 
-    if (voiceShareBtnEl) {
-        voiceShareBtnEl.classList.remove("sharing");
-    }
-
-    if (activeServer) {
-        const screenShareRef = ref(db, `servers/${activeServer}/voiceScreenShare`);
-        const snap = await get(screenShareRef);
-        if (snap.exists() && snap.val().uid === activeUid) {
-            await remove(screenShareRef, writeOptions());
-        }
+    if (activeScreenShare) {
+        await stopScreenShare();
     }
 
     if (voiceUsersUnsub) {
@@ -3187,60 +3216,105 @@ async function leaveVoiceChat(serverCode, myUid) {
         voiceUsersUnsub = null;
     }
 
-    Object.keys(peerConnections).forEach((remoteUid) => {
+    if (screenShareSessionsUnsub) {
+        screenShareSessionsUnsub();
+        screenShareSessionsUnsub = null;
+    }
+
+    if (screenShareLockUnsub) {
+        screenShareLockUnsub();
+        screenShareLockUnsub = null;
+    }
+
+    screenShareSessions = {};
+    screenShareLock = null;
+    voiceUsersData = {};
+
+    Object.keys(peerConnections).forEach(remoteUid => {
         cleanupPeerConnection(remoteUid);
     });
 
     if (activeUid && activeAnalysers[activeUid]) {
         try {
-            if (activeAnalysers[activeUid].source) {
-                activeAnalysers[activeUid].source.disconnect();
-            }
+            activeAnalysers[activeUid].source?.disconnect();
         } catch (err) {
-            console.warn("[VoiceChat] Error disconnecting local Web Audio source:", err);
+            console.warn("[VoiceChat] Local analyser cleanup failed:", err);
         }
+
         delete activeAnalysers[activeUid];
     }
 
     if (localAudioStream) {
-        localAudioStream.getTracks().forEach((track) => track.stop());
+        localAudioStream.getTracks().forEach(track => {
+            track.stop();
+        });
+
         localAudioStream = null;
     }
 
-    if (screenShareListenerUnsub) {
-        screenShareListenerUnsub();
-        screenShareListenerUnsub = null;
+    document.querySelectorAll(".screen-share-card").forEach(card => {
+        const video = card.querySelector("video");
+
+        if (video) {
+            video.pause();
+            video.srcObject = null;
+        }
+
+        card.remove();
+    });
+
+    Object.keys(remoteScreenTracks).forEach(key => {
+        delete remoteScreenTracks[key];
+    });
+
+    activeVoiceUids.clear();
+    lastVoiceUsers = [];
+    voiceSessionId = null;
+    currentVoiceServer = null;
+    currentVoiceMsgKey = null;
+
+    if (voiceShareBtnEl) {
+        voiceShareBtnEl.classList.remove("sharing");
     }
 
-    document.querySelectorAll(".screen-share-card").forEach(card => card.remove());
+    updateServerVoiceIcons();
 
-    if (activeServer && activeUid) {
+    if (voiceContainerEl) {
+        voiceContainerEl.classList.add("hidden");
+    }
+
+    if (currentServer) {
+        switchView("chat");
+    }
+
+    if (activeUid) {
         try {
             const userVoiceRef = ref(db, `servers/${activeServer}/voice/${activeUid}`);
+
             const userVoiceSnap = await get(userVoiceRef);
 
             if (userVoiceSnap.exists()) {
                 const voiceData = userVoiceSnap.val();
+
                 if (voiceData.msgKey) {
-                    await remove(ref(db, `servers/${activeServer}/messages/${voiceData.msgKey}`));
+                    await remove(
+                        ref(db, `servers/${activeServer}/messages/${voiceData.msgKey}`)
+                    );
                 }
             }
 
             await remove(userVoiceRef);
-            await remove(ref(db, `servers/${activeServer}/signal/${activeUid}`));
+
+            await remove(
+                ref(db, `servers/${activeServer}/signal/${activeUid}`)
+            );
+
         } catch (err) {
-            console.error("Error clearing voice session & message data from Firebase:", err);
+            console.error("[VoiceChat] Failed to remove voice session:", err);
         }
     }
 
-    currentVoiceServer = null;
-    currentVoiceMsgKey = null;
-    updateServerVoiceIcons();
-
-    if (voiceContainerEl) voiceContainerEl.classList.add("hidden");
-    if (currentServer) {
-        switchView("chat");
-    }
+    console.log("[VoiceChat] Voice session completely cleaned up.");
 }
 
 async function initLocalAudio() {
@@ -3253,316 +3327,630 @@ async function initLocalAudio() {
             },
             video: false
         });
+        vcMuted = false;
         return true;
     } catch (err) {
-        console.error("Microphone access denied or unavailable:", err);
-        alert("Could not access microphone.");
-        return false;
+        console.warn("[VoiceChat] Microphone access denied or unavailable.", err);
+        
+        localAudioStream = null;
+        vcMuted = true;
+        
+        return true;
     }
 }
 
 function listenToVoiceUsers(serverCode) {
-    if (voiceUsersUnsub) voiceUsersUnsub();
+    if (voiceUsersUnsub) {
+        voiceUsersUnsub();
+    }
 
-    const voiceRef = ref(db, `servers/${serverCode}/voice`);
+    const voiceRef = ref(
+        db,
+        `servers/${serverCode}/voice`
+    );
 
     voiceUsersUnsub = onValue(voiceRef, (snapshot) => {
+        if (currentVoiceServer !== serverCode) return;
+
         const gridEl = document.querySelector(".voice-grid");
+
         if (!gridEl) return;
 
-        gridEl.innerHTML = "";
-        if (!snapshot.exists()) {
-            lastVoiceUsers = [];
-            return;
-        }
+        const users = snapshot.exists()
+            ? snapshot.val()
+            : {};
 
-        const users = snapshot.val();
         const activeUids = Object.keys(users);
 
+        activeVoiceUids = new Set(activeUids);
+        voiceUsersData = users;
+
         if (lastVoiceUsers.length > 0) {
-            const joined = activeUids.filter(u => !lastVoiceUsers.includes(u));
-            const left = lastVoiceUsers.filter(u => !activeUids.includes(u));
+            const joined = activeUids.filter(
+                userUid => !lastVoiceUsers.includes(userUid)
+            );
+
+            const left = lastVoiceUsers.filter(
+                userUid => !activeUids.includes(userUid)
+            );
 
             if (joined.length > 0) {
                 joinVc.currentTime = 0;
-                joinVc.play().catch(err => console.warn("Join audio blocked:", err));
+                joinVc.play().catch(err =>
+                    console.warn("Join audio blocked:", err)
+                );
             }
 
             if (left.length > 0) {
                 leaveVc.currentTime = 0;
-                leaveVc.play().catch(err => console.warn("Leave audio blocked:", err));
+                leaveVc.play().catch(err =>
+                    console.warn("Leave audio blocked:", err)
+                );
             }
         }
 
         lastVoiceUsers = [...activeUids];
 
-        Object.keys(peerConnections).forEach((remoteUid) => {
-            if (!activeUids.includes(remoteUid)) {
+        Object.keys(peerConnections).forEach(remoteUid => {
+            const remoteUser = users[remoteUid];
+            const existingPc = peerConnections[remoteUid];
+
+            if (
+                !remoteUser ||
+                existingPc._remoteVoiceSessionId !==
+                    (remoteUser.voiceSessionId || "legacy")
+            ) {
                 cleanupPeerConnection(remoteUid);
             }
         });
 
-        activeUids.forEach((userUid) => {
+        activeUids.forEach(userUid => {
             const userData = users[userUid];
+
+            if (!userData) return;
+
             const isSelf = userUid === uid;
+
+            if (!isSelf) {
+                const remoteSessionId =
+                    userData.voiceSessionId || "legacy";
+
+                if (
+                    !peerConnections[userUid] ||
+                    peerConnections[userUid]._remoteVoiceSessionId !==
+                        remoteSessionId
+                ) {
+                    const isInitiator = uid < userUid;
+
+                    createPeerConnection(
+                        userUid,
+                        isInitiator,
+                        serverCode,
+                        remoteSessionId
+                    );
+                }
+            }
+        });
+
+        const speakingStates = {};
+
+        gridEl.querySelectorAll(".voice-card:not(.screen-share-card)").forEach(card => {
+            const cardUid = card.id.replace("voice-card-", "");
+            speakingStates[cardUid] = card.classList.contains("speaking");
+        });
+
+        gridEl.querySelectorAll(".voice-card:not(.screen-share-card)").forEach(card => card.remove());
+
+        activeUids.forEach(userUid => {
+            const userData = users[userUid];
+
+            if (!userData) return;
+
             const isMuted = userData.vcMuted === true;
 
-            if (!isSelf && !peerConnections[userUid]) {
-                const isInitiator = uid < userUid;
-                createPeerConnection(userUid, isInitiator, serverCode);
-            }
-
-            const displayName = userData.username;
-
             const card = document.createElement("div");
+
             card.className = "voice-card";
             card.id = `voice-card-${userUid}`;
 
-            const profile = getProfile(userUid, (freshProfile) => {
+            if (speakingStates[userUid]) {
+                card.classList.add("speaking");
+            }
+
+            const profile = getProfile(userUid, freshProfile => {
                 const imgEl = card.querySelector(".voice-avatar");
-                if (imgEl) imgEl.src = freshProfile.pfpUrl;
+
+                if (imgEl) {
+                    imgEl.src = freshProfile.pfpUrl;
+                }
             });
 
-            card.innerHTML = `
-                <img class="voice-avatar" src="${profile.pfpUrl}" alt="Avatar">
-                <div class="voiceUsername">
-                    <span>${displayName}</span>
-                    ${isMuted ? '<i class="fa-solid fa-microphone-slash voice-muted-icon" title="Muted"></i>' : ''}
-                </div>
-            `;
+            const avatar = document.createElement("img");
+
+            avatar.className = "voice-avatar";
+            avatar.src = profile.pfpUrl;
+            avatar.alt = "Avatar";
+
+            const nameContainer = document.createElement("div");
+            nameContainer.className = "voiceUsername";
+
+            const name = document.createElement("span");
+            name.textContent = userData.username || "Anonymous";
+
+            nameContainer.appendChild(name);
+
+            if (isMuted) {
+                const mutedIcon = document.createElement("i");
+
+                mutedIcon.className =
+                    "fa-solid fa-microphone-slash voice-muted-icon";
+
+                mutedIcon.title = "Muted";
+
+                nameContainer.appendChild(mutedIcon);
+            }
+
+            card.appendChild(avatar);
+            card.appendChild(nameContainer);
 
             gridEl.appendChild(card);
         });
 
-        if (window.activeScreenStream && currentVoiceServer === serverCode) {
-            renderScreenCard(window.activeScreenStream, uid, username || "User");
-        }
+        reconcileScreenCards();
     });
 }
 
-function createPeerConnection(remoteUid, isInitiator, serverCode) {
+function createPeerConnection(remoteUid, isInitiator, serverCode, remoteVoiceSessionId) {
+    if (peerConnections[remoteUid]) {
+        cleanupPeerConnection(remoteUid);
+    }
+
+    const connectionId = createPeerConnectionId(
+        remoteUid,
+        remoteVoiceSessionId
+    );
+
     const pc = new RTCPeerConnection(rtcConfig);
+
+    pc._connectionId = connectionId;
+    pc._remoteVoiceSessionId = remoteVoiceSessionId;
+    pc._isInitiator = isInitiator;
+
+    pc._candidateQueue = [];
+
+    pc._offerChain = Promise.resolve();
+    pc._answerChain = Promise.resolve();
+    pc._senderChain = Promise.resolve();
+
+    pc._signalUnsubs = [];
+    pc._screenVideoTransceiver = null;
+
     peerConnections[remoteUid] = pc;
 
-    if (localAudioStream) {
-        localAudioStream.getTracks().forEach((track) => {
+    const micTracks = localAudioStream ? localAudioStream.getAudioTracks() : [];
+
+    if (micTracks.length > 0) {
+        micTracks.forEach(track => {
             pc.addTrack(track, localAudioStream);
         });
+    } else if (isInitiator) {
+        pc.addTransceiver("audio", { direction: "recvonly" });
     }
 
-    if (window.activeScreenStream) {
-        window.activeScreenStream.getTracks().forEach((track) => {
-            pc.addTrack(track, window.activeScreenStream);
+    if (isInitiator) {
+        pc._screenVideoTransceiver = pc.addTransceiver("video", {
+            direction: "sendrecv"
         });
     }
 
-    pc.ontrack = (event) => {
-        const stream = event.streams[0];
+    pc.ontrack = event => {
+        if (pc.signalingState === "closed" || peerConnections[remoteUid] !== pc) {
+            return;
+        }
+
         const track = event.track;
 
         if (track.kind === "audio") {
             let audioEl = document.getElementById(`audio-${remoteUid}`);
+
             if (!audioEl) {
                 audioEl = document.createElement("audio");
                 audioEl.id = `audio-${remoteUid}`;
                 audioEl.autoplay = true;
                 audioEl.playsInline = true;
+
                 document.body.appendChild(audioEl);
             }
-            audioEl.srcObject = stream;
-            audioEl.play().catch((err) => console.warn("Audio autoplay blocked:", err));
 
-            setupSpeakingIndicator(stream, remoteUid);
-        } else if (track.kind === "video") {
-            console.log(`[ScreenShare] Receiving screen share video from ${remoteUid}`);
-            
-            const profile = getProfile(remoteUid);
-            const authorName = profile.username && profile.username !== "Loading..." ? profile.username : "Member";
+            const audioStream = event.streams[0] || new MediaStream([track]);
 
-            renderScreenCard(stream, remoteUid, authorName);
+            audioEl.srcObject = audioStream;
 
-            track.onended = () => {
-                if (remoteUid !== uid) {
-                    const card = document.getElementById(`screen-card-${remoteUid}`);
-                    if (card) card.remove();
-                }
-            };
+            audioEl.play().catch(err =>
+                console.warn("[VoiceChat] Audio autoplay blocked:", err)
+            );
+
+            setupSpeakingIndicator(audioStream, remoteUid);
+
+            return;
+        }
+
+        if (track.kind === "video") {
+            console.log("[ScreenShare] Incoming video track:", {
+                remoteUid,
+                readyState: track.readyState,
+                muted: track.muted,
+                mid: event.transceiver?.mid,
+                currentDirection: event.transceiver?.currentDirection,
+                connectionState: pc.connectionState
+            });
+
+            registerRemoteVideo(
+                remoteUid,
+                pc,
+                track,
+                event.streams[0] || new MediaStream([track])
+            );
         }
     };
 
-    pc.onicecandidate = (event) => {
-        if (event.candidate) {
-            const candidateRef = ref(db, `servers/${serverCode}/signal/${remoteUid}/${uid}/candidates`);
-            push(candidateRef, {
-                candidate: event.candidate.toJSON(),
-                fromUid: uid
-            });
+    pc.onconnectionstatechange = () => {
+        console.log(`[WebRTC] ${remoteUid} connectionState: ${pc.connectionState}`);
+    };
+
+    pc.onicecandidate = event => {
+        if (!event.candidate) return;
+
+        if (pc.signalingState === "closed" || peerConnections[remoteUid] !== pc) {
+            return;
         }
+
+        const candidateRef = ref(db, `servers/${serverCode}/signal/${remoteUid}/${uid}/candidates`);
+
+        push(candidateRef, {
+            candidate: event.candidate.toJSON(),
+            fromUid: uid,
+            connectionId: connectionId
+        }).catch(err => {
+            console.warn("[WebRTC] Failed to send ICE candidate:", err);
+        });
     };
 
     listenForSignals(serverCode, remoteUid, pc);
 
     if (isInitiator) {
-        pc.createOffer()
-            .then((offer) => pc.setLocalDescription(offer))
-            .then(() => {
-                const offerRef = ref(db, `servers/${serverCode}/signal/${remoteUid}/${uid}/offers`);
-                push(offerRef, {
-                    sdp: pc.localDescription.sdp,
-                    type: pc.localDescription.type,
-                    fromUid: uid
-                });
-            })
-            .catch((err) => console.error("Error creating offer:", err));
+        syncScreenSender(pc).then(async () => {
+            if (peerConnections[remoteUid] !== pc) return;
+
+            const offer = await pc.createOffer();
+
+            await pc.setLocalDescription(offer);
+
+            const offerRef = ref(db,`servers/${serverCode}/signal/${remoteUid}/${uid}/offers`);
+
+            await push(offerRef, {
+                sdp: pc.localDescription.sdp,
+                type: pc.localDescription.type,
+                fromUid: uid,
+                connectionId: connectionId
+            });
+
+            console.log(`[WebRTC] Initial offer sent to ${remoteUid}`);
+        })
+        .catch(err => {
+            console.error("[WebRTC] Initial offer failed:", err);
+        });
     }
 
     return pc;
 }
 
-function listenForSignals(serverCode, remoteUid, pc) {
-    const candidatesRef = ref(db, `servers/${serverCode}/signal/${uid}/${remoteUid}/candidates`);
-    const candUnsub = onChildAdded(candidatesRef, async (snapshot) => {
-        if (pc.signalingState === "closed") return;
-        
-        const candidateData = snapshot.val();
-        if (candidateData) {
-            const cand = candidateData.candidate;
-            if (pc.remoteDescription && pc.remoteDescription.type) {
-                try {
-                    await pc.addIceCandidate(new RTCIceCandidate(cand));
-                } catch (err) {
-                    console.warn("[WebRTC] Candidate error:", err);
-                }
-            } else {
-                if (!iceCandidateQueues[remoteUid]) iceCandidateQueues[remoteUid] = [];
-                iceCandidateQueues[remoteUid].push(cand);
-            }
+function registerRemoteVideo(remoteUid, pc, track, stream) {
+    if (!track || peerConnections[remoteUid] !== pc) return;
+
+    const existing = remoteScreenTracks[remoteUid];
+
+    if (existing && existing.pc === pc && existing.track === track) {
+        return;
+    }
+
+    remoteScreenTracks[remoteUid] = {
+        track: track,
+        stream: stream || new MediaStream([track]),
+        pc: pc,
+        connectionId: pc._connectionId
+    };
+
+    track.onunmute = () => {
+        if (peerConnections[remoteUid] !== pc) return;
+        console.log(`[ScreenShare] Video unmuted: ${remoteUid}`);
+        reconcileScreenCards();
+    };
+
+    track.onmute = () => {
+        if (peerConnections[remoteUid] !== pc) return;
+        reconcileScreenCards();
+    };
+
+    track.onended = () => {
+        const current = remoteScreenTracks[remoteUid];
+
+        if (current && current.track === track) {
+            delete remoteScreenTracks[remoteUid];
         }
-    });
 
-    const offerRef = ref(db, `servers/${serverCode}/signal/${uid}/${remoteUid}/offers`);
-    const offerUnsub = onChildAdded(offerRef, async (snapshot) => {
-        if (pc.signalingState === "closed") return;
+        reconcileScreenCards();
+    };
 
-        const offerData = snapshot.val();
-        if (offerData) {
-            if (pc.signalingState !== "stable" && pc.signalingState !== "have-local-offer") {
-                console.warn(`[WebRTC] Ignored offer in state: ${pc.signalingState}`);
-                return;
-            }
-
-            try {
-                await pc.setRemoteDescription(new RTCSessionDescription(offerData));
-                await processQueuedCandidates(pc, remoteUid);
-
-                const answer = await pc.createAnswer();
-                await pc.setLocalDescription(answer);
-
-                const answerRef = ref(db, `servers/${serverCode}/signal/${remoteUid}/${uid}/answers`);
-                push(answerRef, {
-                    sdp: pc.localDescription.sdp,
-                    type: pc.localDescription.type,
-                    fromUid: uid
-                });
-
-                if (window.activeScreenStream && pc.signalingState === "stable") {
-                    const reOffer = await pc.createOffer();
-                    await pc.setLocalDescription(reOffer);
-
-                    const reOfferRef = ref(db, `servers/${serverCode}/signal/${remoteUid}/${uid}/offers`);
-                    push(reOfferRef, {
-                        sdp: pc.localDescription.sdp,
-                        type: pc.localDescription.type,
-                        fromUid: uid
-                    });
-                }
-            } catch (err) {
-                console.warn("[WebRTC] Offer/Re-offer processing error:", err);
-            }
-        }
-    });
-
-    const answerRef = ref(db, `servers/${serverCode}/signal/${uid}/${remoteUid}/answers`);
-    const answerUnsub = onChildAdded(answerRef, async (snapshot) => {
-        if (pc.signalingState === "closed") return;
-
-        const answerData = snapshot.val();
-        if (answerData) {
-            if (pc.signalingState !== "have-local-offer") {
-                console.warn(`[WebRTC] Ignored answer in unexpected state: ${pc.signalingState}`);
-                return;
-            }
-
-            try {
-                await pc.setRemoteDescription(new RTCSessionDescription(answerData));
-                await processQueuedCandidates(pc, remoteUid);
-            } catch (err) {
-                console.warn("[WebRTC] Answer processing error (m-line or state collision):", err);
-            }
-        }
-    });
-
-    pc._signalUnsubs = [candUnsub, offerUnsub, answerUnsub];
+    reconcileScreenCards();
 }
 
-async function processQueuedCandidates(pc, senderUid) {
-    if (pc.signalingState === "closed") return;
+function ensureRemoteVideoRegistered(remoteUid, pc) {
+    const transceiver = pc._screenVideoTransceiver;
+    const track = transceiver?.receiver?.track;
 
-    if (iceCandidateQueues[senderUid] && iceCandidateQueues[senderUid].length > 0) {
-        while (iceCandidateQueues[senderUid].length > 0) {
-            const candObj = iceCandidateQueues[senderUid].shift();
-            try {
-                if (pc.signalingState !== "closed") {
-                    await pc.addIceCandidate(new RTCIceCandidate(candObj));
-                }
-            } catch (err) {
-                console.warn("[WebRTC] Queued candidate error:", err);
+    if (track && track.kind === "video") {
+        registerRemoteVideo(remoteUid, pc, track, null);
+    }
+}
+
+function bindAnswererScreenTransceiver(pc) {
+    if (pc._screenVideoTransceiver) return;
+
+    const transceiver = pc.getTransceivers().find(t =>
+        t.receiver &&
+        t.receiver.track &&
+        t.receiver.track.kind === "video"
+    );
+
+    if (!transceiver) {
+        console.warn("[ScreenShare] No video transceiver found in remote offer.");
+        return;
+    }
+
+    try {
+        transceiver.direction = "sendrecv";
+    } catch (err) {
+        console.warn("[ScreenShare] Could not set transceiver direction:", err);
+    }
+
+    pc._screenVideoTransceiver = transceiver;
+}
+
+function syncScreenSender(pc) {
+    if (!pc) return Promise.resolve();
+
+    pc._senderChain = (pc._senderChain || Promise.resolve()).then(async () => {
+        if (pc.signalingState === "closed") return;
+
+        const transceiver = pc._screenVideoTransceiver;
+
+        if (!transceiver) return;
+
+        const share = activeScreenShare;
+
+        const wanted = (
+            share &&
+            !share.stopping &&
+            share.track &&
+            share.track.readyState === "live"
+        ) ? share.track : null;
+
+        if (transceiver.sender.track === wanted) return;
+
+        await transceiver.sender.replaceTrack(wanted);
+    }).catch(err => {
+        console.warn("[ScreenShare] Sender sync failed:", err);
+    });
+
+    return pc._senderChain;
+}
+
+function syncAllScreenSenders() {
+    return Promise.all(
+        Object.values(peerConnections).map(pc => syncScreenSender(pc))
+    );
+}
+
+function listenForSignals(serverCode, remoteUid, pc) {
+
+    const isCurrentConnection = () => {
+        return (
+            pc.signalingState !== "closed" &&
+            peerConnections[remoteUid] === pc &&
+            currentVoiceServer === serverCode
+        );
+    };
+
+    const candidatesRef = ref(db, `servers/${serverCode}/signal/${uid}/${remoteUid}/candidates`);
+
+    const candidateUnsub = onChildAdded(
+        candidatesRef,
+        async snapshot => {
+            if (!isCurrentConnection()) return;
+
+            const data = snapshot.val();
+
+            if (!data || data.connectionId !== pc._connectionId || !data.candidate) {
+                return;
             }
+
+            const candidate = data.candidate;
+
+            if (!pc.remoteDescription) {
+                pc._candidateQueue.push(candidate);
+                return;
+            }
+
+            try {
+                await pc.addIceCandidate(new RTCIceCandidate(candidate));
+            } catch (err) {
+                console.warn("[WebRTC] ICE candidate rejected:", err);
+            }
+        }
+    );
+
+    const offerRef = ref(db, `servers/${serverCode}/signal/${uid}/${remoteUid}/offers`);
+
+    const offerUnsub = onChildAdded(
+        offerRef,
+        snapshot => {
+            const offerData = snapshot.val();
+
+            if (!isCurrentConnection() || pc._isInitiator || !offerData || offerData.connectionId !== pc._connectionId) {
+                return;
+            }
+
+            pc._offerChain = pc._offerChain.then(async () => {
+                if (!isCurrentConnection()) return;
+
+                if (pc.signalingState !== "stable") {
+                    console.warn("[WebRTC] Ignoring offer in state:", pc.signalingState);
+                    return;
+                }
+
+                await pc.setRemoteDescription(new RTCSessionDescription(offerData));
+
+                bindAnswererScreenTransceiver(pc);
+                await syncScreenSender(pc);
+                ensureRemoteVideoRegistered(remoteUid, pc);
+
+                await processQueuedCandidates(pc);
+                const answer = await pc.createAnswer();
+                await pc.setLocalDescription(answer);
+                if (!isCurrentConnection()) return;
+
+                const answerRef = ref(db, `servers/${serverCode}/signal/${remoteUid}/${uid}/answers`);
+
+                await push(answerRef, {
+                    sdp: pc.localDescription.sdp,
+                    type: pc.localDescription.type,
+                    fromUid: uid,
+                    connectionId: pc._connectionId
+                });
+
+                console.log(`[WebRTC] Answer sent to ${remoteUid}`);
+            })
+            .catch(err => {
+                console.error("[WebRTC] Offer processing failed:", err);
+            });
+        }
+    );
+
+    const answerRef = ref(db, `servers/${serverCode}/signal/${uid}/${remoteUid}/answers`);
+
+    const answerUnsub = onChildAdded(answerRef, snapshot => {
+        const answerData = snapshot.val();
+
+        if (!isCurrentConnection() || !pc._isInitiator || !answerData || answerData.connectionId !== pc._connectionId) {
+            return;
+        }
+
+        pc._answerChain = pc._answerChain.then(async () => {
+            if (!isCurrentConnection()) return;
+
+            if (pc.signalingState !== "have-local-offer") {
+                console.warn("[WebRTC] Ignoring answer in state:", pc.signalingState);
+                return;
+            }
+
+            await pc.setRemoteDescription(new RTCSessionDescription(answerData));
+
+            ensureRemoteVideoRegistered(remoteUid, pc);
+            await syncScreenSender(pc);
+
+            await processQueuedCandidates(pc);
+
+            console.log(`[WebRTC] Connection established with ${remoteUid}`);
+        })
+        .catch(err => {
+            console.error("[WebRTC] Answer processing failed:", err);
+        });
+        }
+    );
+
+    pc._signalUnsubs = [candidateUnsub, offerUnsub, answerUnsub];
+}
+
+async function processQueuedCandidates(pc) {
+    if (!pc || pc.signalingState === "closed" || !pc.remoteDescription) {
+        return;
+    }
+
+    while (pc._candidateQueue.length > 0) {
+        if (pc.signalingState === "closed" || !pc.remoteDescription) {
+            break;
+        }
+
+        const candidate = pc._candidateQueue.shift();
+
+        try {
+            await pc.addIceCandidate(new RTCIceCandidate(candidate));
+        } catch (err) {
+            console.warn("[WebRTC] Queued ICE candidate rejected:", err);
         }
     }
 }
 
 function cleanupPeerConnection(targetUid) {
-    if (peerConnections[targetUid]) {
-        const pc = peerConnections[targetUid];
-        
+    const pc = peerConnections[targetUid];
+
+    if (pc) {
         if (pc._signalUnsubs) {
             pc._signalUnsubs.forEach(unsub => {
-                if (typeof unsub === "function") unsub();
+                if (typeof unsub === "function") {
+                    unsub();
+                }
             });
+
+            pc._signalUnsubs = [];
         }
 
         pc.ontrack = null;
         pc.onicecandidate = null;
-        pc.close();
-        
-        delete peerConnections[targetUid];
+        pc.onconnectionstatechange = null;
+
+        const remote = remoteScreenTracks[targetUid];
+
+        if (remote && remote.pc === pc) {
+            remote.track.onunmute = null;
+            remote.track.onmute = null;
+            remote.track.onended = null;
+
+            delete remoteScreenTracks[targetUid];
+        }
+
+        pc._screenVideoTransceiver = null;
+
+        try {
+            pc.close();
+        } catch (err) {
+            console.warn("[WebRTC] Error closing peer connection:", err);
+        }
+
+        if (peerConnections[targetUid] === pc) {
+            delete peerConnections[targetUid];
+        }
     }
 
     if (activeAnalysers[targetUid]) {
         try {
-            if (activeAnalysers[targetUid].source) {
-                activeAnalysers[targetUid].source.disconnect();
-            }
+            activeAnalysers[targetUid].source?.disconnect();
         } catch (err) {
-            console.warn("[VoiceChat] Error disconnecting Web Audio source:", err);
+            console.warn("[VoiceChat] Error disconnecting analyser:", err);
         }
+
         delete activeAnalysers[targetUid];
     }
 
-    delete iceCandidateQueues[targetUid];
-    delete processedCandidates[targetUid];
-
     const audioEl = document.getElementById(`audio-${targetUid}`);
+
     if (audioEl) {
         audioEl.srcObject = null;
         audioEl.remove();
     }
 
-    const screenCard = document.getElementById(`screen-card-${targetUid}`);
-    if (screenCard) {
-        screenCard.remove();
-    }
+    removeScreenCard(targetUid);
 }
 
 function updateServerVoiceIcons() {
@@ -3584,25 +3972,62 @@ function updateServerVoiceIcons() {
 
 function setupSpeakingIndicator(stream, userUid) {
     try {
+        if (!stream || !userUid) return;
+
+        const audioTracks = stream.getAudioTracks().filter(
+            track => track.readyState === "live"
+        );
+
+        if (audioTracks.length === 0) return;
+
         if (!globalAudioCtx) {
-            globalAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            globalAudioCtx = new (
+                window.AudioContext ||
+                window.webkitAudioContext
+            )();
         }
+
         if (globalAudioCtx.state === "suspended") {
-            globalAudioCtx.resume();
+            globalAudioCtx.resume().catch(err => {
+                console.warn("[VoiceChat] AudioContext resume failed:", err);
+            });
         }
+
+        const previous = activeAnalysers[userUid];
+
+        if (previous) {
+            try {
+                previous.source.disconnect();
+            } catch (err) {}
+
+            delete activeAnalysers[userUid];
+        }
+
+        const audioStream = new MediaStream(audioTracks);
+
         const analyser = globalAudioCtx.createAnalyser();
-        analyser.fftSize = 64;
-        
-        const source = globalAudioCtx.createMediaStreamSource(stream);
+
+        analyser.fftSize = 512;
+        analyser.smoothingTimeConstant = 0.4;
+
+        const source = globalAudioCtx.createMediaStreamSource(
+            audioStream
+        );
+
         source.connect(analyser);
-        
-        activeAnalysers[userUid] = { 
-            analyser, 
-            dataArray: new Uint8Array(analyser.frequencyBinCount),
-            source 
+
+        activeAnalysers[userUid] = {
+            analyser,
+            dataArray: new Uint8Array(analyser.fftSize),
+            source,
+            level: 0,
+            isSpeaking: false
         };
+
+        console.log(`[VoiceChat] Speaking detector initialized: ${userUid}`);
+
     } catch (err) {
-        console.warn("Web Audio API setup failed:", err);
+        console.warn("[VoiceChat] Speaking detector setup failed:",err);
     }
 }
 
@@ -3611,21 +4036,35 @@ function updateSpeakingIndicators() {
 
     for (const [userUid, data] of Object.entries(activeAnalysers)) {
         const { analyser, dataArray } = data;
-        analyser.getByteFrequencyData(dataArray);
 
-        let sum = 0;
+        analyser.getByteTimeDomainData(dataArray);
+
+        let sumSquares = 0;
+
         for (let i = 0; i < dataArray.length; i++) {
-            sum += dataArray[i];
+            const sample = (dataArray[i] - 128) / 128;
+            sumSquares += sample * sample;
         }
-        let average = sum / dataArray.length;
-        
+
+        const rms = Math.sqrt(
+            sumSquares / dataArray.length
+        );
+
+        data.level = data.level * 0.65 + rms * 0.35;
+
+        if (!data.isSpeaking && data.level > 0.035) {
+            data.isSpeaking = true;
+        } else if (data.isSpeaking && data.level < 0.020) {
+            data.isSpeaking = false;
+        }
+
         const card = document.getElementById(`voice-card-${userUid}`);
+
         if (card) {
-            if (average > 15) {
-                card.classList.add("speaking");
-            } else {
-                card.classList.remove("speaking");
-            }
+            card.classList.toggle(
+                "speaking",
+                data.isSpeaking
+            );
         }
     }
 }
@@ -3691,63 +4130,737 @@ function setupServerVoiceListener(serverCode, rowEl) {
 
 
 // SCREENSHARE
-async function stopScreenShare() {
-    if (!currentVoiceServer) return;
+const SCREEN_SHARE_LEASE_MS = 90000;
+const SCREEN_SHARE_REFRESH_MS = 15000;
 
-    const screenShareRef = ref(db, `servers/${currentVoiceServer}/voiceScreenShare`);
-    await remove(screenShareRef, writeOptions());
+function getScreenShareLockRef(serverCode) {
+    return ref(db,`servers/${serverCode}/voiceScreenShareLock`);
+}
 
-    if (window.activeScreenStream) {
-        window.activeScreenStream.getTracks().forEach(track => track.stop());
-        window.activeScreenStream = null;
+function getScreenShareSessionsRef(serverCode) {
+    return ref(db, `servers/${serverCode}/voiceScreenShareSessions`);
+}
+
+function getScreenShareSessionRef(serverCode, sessionId) {
+    return ref(db, `servers/${serverCode}/voiceScreenShareSessions/${sessionId}`);
+}
+
+function withTimeout(promise, ms) {
+    return Promise.race([
+        promise,
+        new Promise(resolve => setTimeout(resolve, ms))
+    ]);
+}
+
+async function claimScreenShareLock(serverCode, sessionId, ownVoiceSessionId) {
+    const lockRef = getScreenShareLockRef(serverCode);
+
+    let staleSessionId = null;
+
+    try {
+        const result = await runTransaction(lockRef, current => {
+            if (
+                current &&
+                current.uid !== uid &&
+                Number(current.expiresAt) > Date.now()
+            ) {
+                return;
+            }
+
+            staleSessionId = current?.sessionId || null;
+
+            return {
+                uid: uid,
+                username: username || "User",
+                sessionId: sessionId,
+                voiceSessionId: ownVoiceSessionId || null,
+                expiresAt: Date.now() + SCREEN_SHARE_LEASE_MS
+            };
+        }, {
+            applyLocally: false
+        });
+
+        if (!result.committed || result.snapshot.val()?.sessionId !== sessionId) {
+            return false;
+        }
+
+        if (staleSessionId && staleSessionId !== sessionId) {
+            await remove(
+                getScreenShareSessionRef(serverCode, staleSessionId),
+                writeOptions()
+            );
+        }
+
+        return true;
+
+    } catch (err) {
+        console.error("[ScreenShare] Failed to claim sharing lock:", err);
+        return false;
+    }
+}
+
+async function releaseScreenShareLock(serverCode, sessionId) {
+    const lockRef = getScreenShareLockRef(serverCode);
+
+    try {
+        await runTransaction(lockRef, current => {
+            if (!current || current.sessionId !== sessionId) {
+                return;
+            }
+
+            return null;
+        }, {
+            applyLocally: false
+        });
+    } catch (err) {
+        console.warn("[ScreenShare] Failed to release sharing lock:", err);
+    }
+}
+
+async function refreshScreenShareLease(sessionId) {
+    const share = activeScreenShare;
+
+    if (!share || share.sessionId !== sessionId || share.stopping || share.leaseRefreshing) {
+        return;
     }
 
-    const localScreenCard = document.getElementById(`screen-card-${uid}`);
-    if (localScreenCard) {
-        localScreenCard.remove();
+    share.leaseRefreshing = true;
+
+    try {
+        const lockRef = getScreenShareLockRef(share.serverCode);
+
+        const result = await runTransaction(lockRef, current => {
+            if (!current || current.sessionId !== sessionId) {
+                return;
+            }
+
+            return {
+                ...current,
+                expiresAt: Date.now() + SCREEN_SHARE_LEASE_MS
+            };
+        }, {
+            applyLocally: false
+        });
+
+        if (!result.committed || result.snapshot.val()?.sessionId !== sessionId) {
+            const snap = await get(lockRef);
+
+            if (snap.exists() && snap.val()?.sessionId === sessionId) {
+                await set(
+                    ref(db, `servers/${share.serverCode}/voiceScreenShareLock/expiresAt`),
+                    Date.now() + SCREEN_SHARE_LEASE_MS,
+                    writeOptions()
+                );
+                return;
+            }
+
+            console.warn("[ScreenShare] Sharing lock was lost.");
+
+            await stopScreenShare({skipLockRelease: true});
+        }
+
+    } catch (err) {
+        console.error("[ScreenShare] Lease refresh failed:", err);
+    } finally {
+        if (activeScreenShare?.sessionId === sessionId) {
+            activeScreenShare.leaseRefreshing = false;
+        }
     }
+}
+
+async function toggleScreenShare() {
+    if (!currentVoiceServer || !uid) {
+        return;
+    }
+
+    if (activeScreenShare) {
+        await stopScreenShare();
+        return;
+    }
+
+    if (screenShareStarting) {
+        return;
+    }
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+        alert("Your browser does not support screen sharing.");
+        return;
+    }
+
+    const serverCode = currentVoiceServer;
+    const ownVoiceSessionId = voiceSessionId;
+
+    let stream = null;
+    let sessionId = null;
+    let sessionRef = null;
+    let lockRef = null;
+    let sessionWritten = false;
+    let lockClaimed = false;
+
+    screenShareStarting = true;
+
+    try {
+        stream = await navigator.mediaDevices.getDisplayMedia({
+            video: { frameRate: { ideal: 30 } },
+            audio: false
+        });
+
+        const videoTrack = stream.getVideoTracks()[0];
+
+        if (!videoTrack) {
+            throw new Error("No screen video track was returned.");
+        }
+
+        if (
+            currentVoiceServer !== serverCode ||
+            voiceSessionId !== ownVoiceSessionId
+        ) {
+            stream.getTracks().forEach(track => track.stop());
+            return;
+        }
+
+        sessionId = createSessionId();
+        sessionRef = getScreenShareSessionRef(serverCode, sessionId);
+        lockRef = getScreenShareLockRef(serverCode);
+
+        await set(sessionRef, {
+            uid: uid,
+            username: username || "User",
+            sessionId: sessionId,
+            serverCode: serverCode,
+            voiceSessionId: ownVoiceSessionId,
+            trackId: videoTrack.id,
+            startedAt: serverTimestamp()
+        }, writeOptions());
+
+        sessionWritten = true;
+
+        await onDisconnect(sessionRef).remove(writeOptions());
+
+        const claimed = await claimScreenShareLock(
+            serverCode,
+            sessionId,
+            ownVoiceSessionId
+        );
+
+        if (!claimed) {
+            const denied = new Error("lock-denied");
+            denied.name = "LockDenied";
+            throw denied;
+        }
+
+        lockClaimed = true;
+
+        await onDisconnect(lockRef).remove(writeOptions());
+
+        if (
+            currentVoiceServer !== serverCode ||
+            voiceSessionId !== ownVoiceSessionId
+        ) {
+            throw Object.assign(new Error("left-voice"), { name: "LeftVoice" });
+        }
+
+        activeScreenShare = {
+            serverCode: serverCode,
+            sessionId: sessionId,
+            voiceSessionId: ownVoiceSessionId,
+            stream: stream,
+            track: videoTrack,
+            leaseTimer: null,
+            visibilityHandler: null,
+            stopping: false,
+            leaseRefreshing: false
+        };
+
+        videoTrack.onended = () => {
+            if (activeScreenShare?.sessionId === sessionId) {
+                stopScreenShare();
+            }
+        };
+
+        await syncAllScreenSenders();
+
+        activeScreenShare.leaseTimer = setInterval(() => {
+            refreshScreenShareLease(sessionId);
+        }, SCREEN_SHARE_REFRESH_MS);
+
+        activeScreenShare.visibilityHandler = () => {
+            if (!document.hidden) {
+                refreshScreenShareLease(sessionId);
+            }
+        };
+
+        document.addEventListener("visibilitychange", activeScreenShare.visibilityHandler);
+
+        if (voiceShareBtnEl) {
+            voiceShareBtnEl.classList.add("sharing");
+        }
+
+        reconcileScreenCards();
+
+        console.log(`[ScreenShare] Started session ${sessionId}`);
+
+    } catch (err) {
+        if (err.name === "LockDenied") {
+            alert("Someone is already screen sharing in this server.");
+        } else if (err.name !== "NotAllowedError" && err.name !== "LeftVoice") {
+            console.error("[ScreenShare] Failed to start sharing:", err);
+        }
+
+        if (activeScreenShare && activeScreenShare.sessionId === sessionId) {
+            await stopScreenShare();
+        } else {
+            if (stream) {
+                stream.getTracks().forEach(track => {
+                    track.onended = null;
+                    track.stop();
+                });
+            }
+
+            if (sessionRef && sessionWritten) {
+                onDisconnect(sessionRef).cancel().catch(() => {});
+                remove(sessionRef, writeOptions()).catch(() => {});
+            }
+
+            if (lockRef && lockClaimed) {
+                onDisconnect(lockRef).cancel().catch(() => {});
+                releaseScreenShareLock(serverCode, sessionId);
+            }
+        }
+    } finally {
+        screenShareStarting = false;
+    }
+}
+
+async function stopScreenShare(options = {}) {
+    const share = activeScreenShare;
+
+    if (!share || share.stopping) {
+        return;
+    }
+
+    share.stopping = true;
+
+    activeScreenShare = null;
+
+    if (share.leaseTimer) {
+        clearInterval(share.leaseTimer);
+        share.leaseTimer = null;
+    }
+
+    if (share.visibilityHandler) {
+        document.removeEventListener("visibilitychange", share.visibilityHandler);
+    }
+
+    removeScreenCard(uid);
 
     if (voiceShareBtnEl) {
         voiceShareBtnEl.classList.remove("sharing");
     }
-    
-    console.log("[ScreenShare] Stopped sharing manually.");
+
+    const sessionRef = getScreenShareSessionRef(share.serverCode, share.sessionId);
+    const lockRef = getScreenShareLockRef(share.serverCode);
+
+    const networkOps = Promise.allSettled([
+        remove(sessionRef, writeOptions()),
+        options.skipLockRelease
+            ? Promise.resolve()
+            : releaseScreenShareLock(share.serverCode, share.sessionId)
+    ]);
+
+    onDisconnect(sessionRef).cancel().catch(() => {});
+    onDisconnect(lockRef).cancel().catch(() => {});
+
+    await syncAllScreenSenders();
+
+    if (share.stream) {
+        share.stream.getTracks().forEach(track => {
+            track.onended = null;
+            track.stop();
+        });
+    }
+
+    await withTimeout(networkOps, 5000);
+
+    reconcileScreenCards();
+
+    console.log(`[ScreenShare] Stopped session ${share.sessionId}`);
 }
 
-function renderScreenCard(stream, ownerUid, ownerName) {
-    const gridEl = document.querySelector(".voice-grid");
-    if (!gridEl) return;
+function listenForScreenShares(serverCode) {
+    if (screenShareSessionsUnsub) {
+        screenShareSessionsUnsub();
+        screenShareSessionsUnsub = null;
+    }
 
-    if (!stream || !stream.getVideoTracks || stream.getVideoTracks().length === 0 || !stream.getVideoTracks()[0].enabled) {
-        const existingCard = document.getElementById(`screen-card-${ownerUid}`);
-        if (existingCard) existingCard.remove();
+    if (screenShareLockUnsub) {
+        screenShareLockUnsub();
+        screenShareLockUnsub = null;
+    }
+
+    screenShareSessions = {};
+    screenShareLock = null;
+
+    const sessionsRef = getScreenShareSessionsRef(serverCode);
+    const lockRef = getScreenShareLockRef(serverCode);
+
+    screenShareSessionsUnsub = onValue(sessionsRef, snapshot => {
+        if (currentVoiceServer !== serverCode) return;
+
+        screenShareSessions = snapshot.exists() ? snapshot.val() : {};
+        reconcileScreenCards();
+    });
+
+    screenShareLockUnsub = onValue(lockRef, snapshot => {
+        if (currentVoiceServer !== serverCode) return;
+
+        screenShareLock = snapshot.exists()
+            ? snapshot.val()
+            : null;
+
+        reconcileScreenCards();
+    });
+}
+
+async function sweepOwnStaleScreenShare(serverCode) {
+    try {
+        const lockSnap = await get(getScreenShareLockRef(serverCode));
+        const sessionsSnap = await get(getScreenShareSessionsRef(serverCode));
+
+        const sessions = sessionsSnap.exists() ? sessionsSnap.val() : {};
+        const lock = lockSnap.exists() ? lockSnap.val() : null;
+
+        for (const [sessionId, session] of Object.entries(sessions)) {
+            if (currentVoiceServer !== serverCode || activeScreenShare || screenShareStarting) {
+                return;
+            }
+
+            if (session && session.uid === uid) {
+                await remove(getScreenShareSessionRef(serverCode, sessionId), writeOptions());
+            }
+        }
+
+        if (
+            lock &&
+            lock.uid === uid &&
+            currentVoiceServer === serverCode &&
+            !activeScreenShare &&
+            !screenShareStarting
+        ) {
+            await releaseScreenShareLock(serverCode, lock.sessionId);
+        }
+    } catch (err) {
+        console.warn("[ScreenShare] Stale record sweep failed:", err);
+    }
+}
+
+async function healOwnShareRecords() {
+    if (
+        healingShareRecords ||
+        activeScreenShare ||
+        screenShareStarting ||
+        !currentVoiceServer ||
+        !voiceSessionId
+    ) {
         return;
     }
 
-    let screenCardId = `screen-card-${ownerUid}`;
-    let card = document.getElementById(screenCardId);
+    const serverCode = currentVoiceServer;
+    const lock = screenShareLock;
+
+    const ownSessions = Object.values(screenShareSessions || {}).filter(s =>
+        s && s.uid === uid && s.voiceSessionId === voiceSessionId
+    );
+
+    const ownLock = lock && lock.uid === uid && lock.voiceSessionId === voiceSessionId;
+
+    if (ownSessions.length === 0 && !ownLock) return;
+
+    healingShareRecords = true;
+
+    try {
+        for (const session of ownSessions) {
+            await remove(
+                getScreenShareSessionRef(serverCode, session.sessionId),
+                writeOptions()
+            );
+        }
+
+        if (ownLock) {
+            await releaseScreenShareLock(serverCode, lock.sessionId);
+        }
+    } catch (err) {
+        console.warn("[ScreenShare] Self-heal failed:", err);
+    } finally {
+        healingShareRecords = false;
+    }
+}
+
+function removeScreenCard(ownerUid) {
+    const card = document.getElementById(
+        `screen-card-${ownerUid}`
+    );
+
+    if (card) {
+        const video = card.querySelector("video");
+
+        if (video) {
+            video.pause();
+            video.srcObject = null;
+        }
+
+        card.remove();
+    }
+}
+
+function renderScreenCard(stream, ownerUid, ownerName, sessionId, remoteTrack) {
+    const gridEl = document.querySelector(".voice-grid");
+
+    if (!gridEl || !stream) return;
+
+    const videoTrack = remoteTrack || stream.getVideoTracks()[0];
+
+    if (
+        !videoTrack ||
+        videoTrack.readyState !== "live"
+    ) {
+        return;
+    }
+
+    const cardId = `screen-card-${ownerUid}`;
+
+    let card = document.getElementById(cardId);
+
+    if (
+        card &&
+        card.dataset.sessionId !== sessionId
+    ) {
+        removeScreenCard(ownerUid);
+        card = null;
+    }
 
     if (!card) {
         card = document.createElement("div");
-        card.className = "voice-card screen-share-card";
-        card.id = screenCardId;
 
-        card.innerHTML = `
-            <video autoplay playsinline muted class="screen-share-video" id="video-${ownerUid}"></video>
-            <div class="voiceUsername">
-                <span>${ownerName}'s Screen</span>
-            </div>
-        `;
+        card.className = "voice-card screen-share-card";
+        card.id = cardId;
+        card.dataset.sessionId = sessionId;
+
+        const video = document.createElement("video");
+
+        video.autoplay = true;
+        video.playsInline = true;
+        video.muted = true;
+        video.className = "screen-share-video";
+        video.id = `video-${ownerUid}`;
+
+        video.addEventListener("loadedmetadata", () => {
+            video.play().catch(() => {});
+        });
+
+        const usernameContainer = document.createElement("div");
+
+        usernameContainer.className = "voiceUsername";
+
+        const usernameLabel = document.createElement("span");
+
+        usernameLabel.textContent = `${ownerName}'s Screen`;
+
+        usernameContainer.appendChild(usernameLabel);
+
+        const status = document.createElement("div");
+
+        status.className = "screen-share-status";
+        status.textContent = "Connecting…";
+        status.style.cssText = [
+            "position:absolute", "inset:0", "display:none",
+            "align-items:center", "justify-content:center",
+            "background:rgba(0,0,0,0.5)", "color:#fff",
+            "font-size:14px", "pointer-events:none"
+        ].join(";");
+
+        card.appendChild(video);
+        card.appendChild(usernameContainer);
+        card.appendChild(status);
+
         gridEl.appendChild(card);
+
+        if (getComputedStyle(card).position === "static") {
+            card.style.position = "relative";
+        }
     }
 
-    const videoEl = document.getElementById(`video-${ownerUid}`);
-    if (videoEl) {
+    const videoEl = card.querySelector("video");
+
+    if (videoEl && videoEl.srcObject !== stream) {
         videoEl.srcObject = stream;
-        if (ownerUid === uid) videoEl.muted = true;
-        videoEl.play().catch(err => console.warn("Video autoplay blocked:", err));
+    }
+
+    if (videoEl && videoEl.paused) {
+        videoEl.play().catch(err => {
+            console.warn(
+                "[ScreenShare] Video playback failed:",
+                err
+            );
+        });
+    }
+
+    const statusEl = card.querySelector(".screen-share-status");
+
+    if (statusEl) {
+        statusEl.style.display = (remoteTrack && remoteTrack.muted) ? "flex" : "none";
     }
 }
+
+function getActiveShareSession() {
+    const lock = screenShareLock;
+
+    if (!lock || !lock.sessionId) return null;
+
+    const session = screenShareSessions[lock.sessionId];
+
+    if (!session) return null;
+
+    if (session.uid !== lock.uid || session.sessionId !== lock.sessionId) return null;
+
+    if (session.serverCode !== currentVoiceServer) return null;
+
+    const voiceUser = voiceUsersData[session.uid];
+
+    if (!voiceUser) return null;
+
+    if (
+        session.voiceSessionId &&
+        voiceUser.voiceSessionId &&
+        session.voiceSessionId !== voiceUser.voiceSessionId
+    ) {
+        return null;
+    }
+
+    return session;
+}
+
+function reconcileScreenCards() {
+    const session = getActiveShareSession();
+
+    document.querySelectorAll(".screen-share-card").forEach(card => {
+        if (
+            !session ||
+            card.id !== `screen-card-${session.uid}` ||
+            card.dataset.sessionId !== session.sessionId
+        ) {
+            removeScreenCard(card.id.replace("screen-card-", ""));
+        }
+    });
+
+    healOwnShareRecords();
+
+    if (!session) return;
+
+    if (session.uid === uid) {
+        if (
+            activeScreenShare &&
+            !activeScreenShare.stopping &&
+            activeScreenShare.sessionId === session.sessionId
+        ) {
+            renderScreenCard(
+                activeScreenShare.stream,
+                uid,
+                session.username || username || "User",
+                session.sessionId,
+                null
+            );
+        } else {
+            removeScreenCard(uid);
+        }
+
+        return;
+    }
+
+    const pc = peerConnections[session.uid];
+
+    if (pc) {
+        ensureRemoteVideoRegistered(session.uid, pc);
+    }
+
+    const remote = remoteScreenTracks[session.uid];
+
+    if (
+        !remote ||
+        !pc ||
+        remote.pc !== pc ||
+        pc.signalingState === "closed" ||
+        remote.track.readyState !== "live"
+    ) {
+        removeScreenCard(session.uid);
+        return;
+    }
+
+    renderScreenCard(
+        remote.stream,
+        session.uid,
+        session.username || "Member",
+        session.sessionId,
+        remote.track
+    );
+}
+
+window.debugScreenShare = async function () {
+    const report = [];
+
+    for (const [remoteUid, pc] of Object.entries(peerConnections)) {
+        const info = {
+            remoteUid,
+            initiator: pc._isInitiator,
+            signalingState: pc.signalingState,
+            connectionState: pc.connectionState,
+            iceConnectionState: pc.iceConnectionState,
+            transceivers: pc.getTransceivers().map(t => ({
+                mid: t.mid,
+                kind: t.receiver?.track?.kind,
+                direction: t.direction,
+                currentDirection: t.currentDirection,
+                isScreenTransceiver: t === pc._screenVideoTransceiver,
+                sending: t.sender.track
+                    ? { id: t.sender.track.id, readyState: t.sender.track.readyState }
+                    : null,
+                receivingMuted: t.receiver?.track?.muted
+            }))
+        };
+
+        try {
+            const stats = await pc.getStats();
+
+            stats.forEach(r => {
+                const kind = r.kind || r.mediaType;
+
+                if (kind !== "video") return;
+
+                if (r.type === "outbound-rtp") {
+                    info.videoOut = { bytesSent: r.bytesSent, framesSent: r.framesSent };
+                }
+
+                if (r.type === "inbound-rtp") {
+                    info.videoIn = { bytesReceived: r.bytesReceived, framesDecoded: r.framesDecoded };
+                }
+            });
+        } catch (err) {
+            info.statsError = String(err);
+        }
+
+        report.push(info);
+    }
+
+    console.log(JSON.stringify({
+        browser: navigator.userAgent,
+        sharing: activeScreenShare ? activeScreenShare.sessionId : null,
+        lock: screenShareLock,
+        sessions: screenShareSessions,
+        peers: report
+    }, null, 2));
+
+    return report;
+};
 
 
 // SETTINGS
@@ -3854,6 +4967,80 @@ function isTabActive() {
     return document.visibilityState === "visible";
 }
 
+async function handleInvite() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const joinCode = urlParams.get('invite');
+    
+    if (!joinCode) return false;
+
+    history.replaceState("", document.title, window.location.pathname);
+
+    if (joinCode === "public" || joinCode === "announcements" || myServers.some(s => s.code === joinCode)) {
+        switchServer(joinCode);
+        return true;
+    }
+
+    try {
+        const kickSnap = await get(ref(db, `servers/${joinCode}/kicked/${uid}`));
+        if (kickSnap.exists()) {
+            alert("You have been kicked from this server.");
+            return false;
+        }
+
+        const serverRef = ref(db, `servers/${joinCode}`);
+        const snapshot = await get(serverRef);
+
+        if (!snapshot.exists()) {
+            alert("Invalid invite link.");
+            return false;
+        }
+
+        const serverData = snapshot.val();
+        const serverName = serverData.name || `Server ${joinCode}`;
+
+        if (uid) {
+            await Promise.all([
+                set(ref(db, `servers/${joinCode}/members/${uid}`), true, writeOptions()),
+                set(ref(db, `users/${uid}/joinedServers/${joinCode}`), true, writeOptions())
+            ]);
+        }
+
+        await sendBotMessage(joinCode, `👋 @${username} joined the server!`);
+
+        addServerToSidebar(joinCode, serverName);
+        switchServer(joinCode);
+        setupNotificationListener(joinCode);
+        
+        return true;
+    } catch (err) {
+        console.error("Failed to handle invite:", err);
+        return false;
+    }
+}
+
+function setInputDisabledState(isDisabled, placeholderText) {
+    if (!messageInputEl) return;
+
+    if (isDisabled) {
+        messageInputEl.removeAttribute("contenteditable");
+        messageInputEl.classList.add("disabled");
+        messageInputEl.setAttribute("data-placeholder", placeholderText);
+        messageInputEl.textContent = "";
+
+        if (fileInputEl) fileInputEl.disabled = true;
+        if (typeof attachBtnEl !== "undefined" && attachBtnEl) attachBtnEl.disabled = true;
+    } else {
+        messageInputEl.setAttribute("contenteditable", "plaintext-only");
+        messageInputEl.classList.remove("disabled");
+        messageInputEl.setAttribute("data-placeholder", placeholderText);
+
+        if (fileInputEl) fileInputEl.disabled = false;
+        if (typeof attachBtnEl !== "undefined" && attachBtnEl) attachBtnEl.disabled = false;
+    }
+}
+
+
+// NOTIFICATIONS
 function maybeNotify(msg, serverId) {
     if (msg.uid === uid) return;
     if (msg.isSystem) return;
@@ -3934,6 +5121,8 @@ function setupNotificationListener(serverId) {
     }, { onlyOnce: true });
 }
 
+
+// CONTEXT MENUS
 async function showMessageContextMenu(e, msg) {
     e.preventDefault();
     e.stopPropagation();
@@ -4116,120 +5305,4 @@ function hideContextMenu(e) {
     document.querySelectorAll(".message.right-clicked").forEach(el => {
         el.classList.remove("right-clicked");
     });
-}
-
-async function handleInvite() {
-    const urlParams = new URLSearchParams(window.location.search);
-    const joinCode = urlParams.get('invite');
-    
-    if (!joinCode) return false;
-
-    history.replaceState("", document.title, window.location.pathname);
-
-    if (joinCode === "public" || joinCode === "announcements" || myServers.some(s => s.code === joinCode)) {
-        switchServer(joinCode);
-        return true;
-    }
-
-    try {
-        const kickSnap = await get(ref(db, `servers/${joinCode}/kicked/${uid}`));
-        if (kickSnap.exists()) {
-            alert("You have been kicked from this server.");
-            return false;
-        }
-
-        const serverRef = ref(db, `servers/${joinCode}`);
-        const snapshot = await get(serverRef);
-
-        if (!snapshot.exists()) {
-            alert("Invalid invite link.");
-            return false;
-        }
-
-        const serverData = snapshot.val();
-        const serverName = serverData.name || `Server ${joinCode}`;
-
-        if (uid) {
-            await Promise.all([
-                set(ref(db, `servers/${joinCode}/members/${uid}`), true, writeOptions()),
-                set(ref(db, `users/${uid}/joinedServers/${joinCode}`), true, writeOptions())
-            ]);
-        }
-
-        await sendBotMessage(joinCode, `👋 @${username} joined the server!`);
-
-        addServerToSidebar(joinCode, serverName);
-        switchServer(joinCode);
-        setupNotificationListener(joinCode);
-        
-        return true;
-    } catch (err) {
-        console.error("Failed to handle invite:", err);
-        return false;
-    }
-}
-
-function setInputDisabledState(isDisabled, placeholderText) {
-    if (!messageInputEl) return;
-
-    if (isDisabled) {
-        messageInputEl.removeAttribute("contenteditable");
-        messageInputEl.classList.add("disabled");
-        messageInputEl.setAttribute("data-placeholder", placeholderText);
-        messageInputEl.textContent = "";
-
-        if (fileInputEl) fileInputEl.disabled = true;
-        if (typeof attachBtnEl !== "undefined" && attachBtnEl) attachBtnEl.disabled = true;
-    } else {
-        messageInputEl.setAttribute("contenteditable", "plaintext-only");
-        messageInputEl.classList.remove("disabled");
-        messageInputEl.setAttribute("data-placeholder", placeholderText);
-
-        if (fileInputEl) fileInputEl.disabled = false;
-        if (typeof attachBtnEl !== "undefined" && attachBtnEl) attachBtnEl.disabled = false;
-    }
-}
-
-async function generateHWID() {
-    let renderer = "unknown";
-    try {
-        const canvas = document.createElement('canvas');
-        const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-        if (gl) {
-            const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
-            if (debugInfo) {
-                renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) || gl.getParameter(37446);
-            }
-        }
-    } catch (e) {
-    }
-
-    const signals = [
-        screen.width + "x" + screen.height,
-        screen.colorDepth,                        
-        renderer,
-        navigator.hardwareConcurrency || "unknown",
-        navigator.deviceMemory || "unknown",     
-        Intl.DateTimeFormat().resolvedOptions().timeZone
-    ].join("|||");
-
-    if (window.crypto && window.crypto.subtle) {
-        const msgBuffer = new TextEncoder().encode(signals);
-        const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-        const hashArray = Array.from(new Uint8Array(hashBuffer));
-        const hwid = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-        console.log("Generated HWID SHA-256 Hash:", hwid);
-        return hwid;
-    } else {
-        console.warn("crypto.subtle unavailable on insecure IP.");
-        let hash = 0;
-        for (let i = 0; i < signals.length; i++) {
-            const char = signals.charCodeAt(i);
-            hash = ((hash << 5) - hash) + char;
-            hash |= 0; 
-        }
-        const fallbackHwid = "insecure_net_" + Math.abs(hash).toString(16);
-        console.log("Generated HWID Fallback Hash:", fallbackHwid);
-        return fallbackHwid;
-    }
 }
