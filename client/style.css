@@ -1353,6 +1353,10 @@ a {
     transition: transform 0.2s ease, border-color 0.2s ease;
 }
 
+.voice-card i {
+    margin-left: 5px;
+}
+
 .voice-card.screen-share-card {
     position: relative;
     padding: 0;
@@ -1496,6 +1500,7 @@ a {
     padding: 5px 10px;
     cursor: pointer;
     appearance: none;
+    width: 175px;
 }
 
 .setting-item select:hover {

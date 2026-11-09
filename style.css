@@ -212,7 +212,7 @@ body {
 #builtWith img {
     height: 32px;
     cursor: pointer;
-    transition: transform 0.2s ease, opacity 0.2s ease;
+    transition: transform 0.2s ease;
 }
 
 #builtWith img:hover {

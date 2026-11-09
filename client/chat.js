@@ -26,6 +26,16 @@ const DEFAULT_SETTINGS = {
   showPfp: true,
   startupServer: 'public',
   startupSidebar: false,
+  voiceTheme: 'none',
+};
+const VOICE_THEMES = {
+    sunset: "linear-gradient(135deg, #FF6B4A, #FFB347)",
+    grape: "linear-gradient(135deg, #7B2FF7, #F107A3)",
+    night: "linear-gradient(135deg, #000, #252525)",
+    cherry: "linear-gradient(135deg, #a70013, #ff0f7b)",
+    forest: "linear-gradient(135deg, #134E5E, #71B280)",
+    aurora: "linear-gradient(135deg, #00F260, #0575E6)",
+    admin: "linear-gradient(135deg, #4E00CA, #FF0044)"
 };
 const userCache = {};
 
@@ -279,6 +289,17 @@ window.onload = async () => {
 async function finishAppLoad() {
     listenToMuteStatus();
     const newUser = await loadSavedUser(uid);
+
+    try {
+        const themeSnap = await get(ref(db, `users/${uid}/voiceTheme`));
+        if (themeSnap.exists()) {
+            appSettings.voiceTheme = themeSnap.val();
+        } else {
+            appSettings.voiceTheme = 'none';
+        }
+    } catch (err) {
+        console.error("Failed to load voice theme from Firebase:", err);
+    }
 
     await loadUserServers();
     await validateSavedServers();
@@ -831,7 +852,8 @@ function attachUIListeners() {
                     joinedAt: serverTimestamp(),
                     vcMuted: vcMuted,
                     msgKey: currentVoiceMsgKey,
-                    voiceSessionId: voiceSessionId
+                    voiceSessionId: voiceSessionId,
+                    voiceTheme: appSettings.voiceTheme || 'none'
                 }, writeOptions());
             }
         });
@@ -1296,12 +1318,16 @@ async function checkAdminStatus() {
     const adminRef = ref(db, `status/admins/${uid}`);
     const snap = await get(adminRef);
 
+    const adminOption = document.getElementById('theme-option-admin');
+
     if (snap.exists()) {
         isAdmin = true;
         adminBtnEl.style.display = "block";
+        if (adminOption) adminOption.style.display = "block";
     } else {
         isAdmin = false;
         adminBtnEl.style.display = "none";
+        if (adminOption) adminOption.style.display = "none";
     }
 }
 
@@ -3158,7 +3184,8 @@ async function _joinVoiceChat(serverCode) {
         joinedAt: serverTimestamp(),
         vcMuted: vcMuted,
         msgKey: currentVoiceMsgKey,
-        voiceSessionId: voiceSessionId
+        voiceSessionId: voiceSessionId,
+        voiceTheme: appSettings.voiceTheme || 'none'
     });
 
     onDisconnect(voiceUserRef).remove(writeOptions());
@@ -3488,6 +3515,11 @@ function listenToVoiceUsers(serverCode) {
 
             card.appendChild(avatar);
             card.appendChild(nameContainer);
+
+            const userThemeKey = userData.voiceTheme;
+            if (userThemeKey && userThemeKey !== 'none' && VOICE_THEMES[userThemeKey]) {
+                card.style.background = VOICE_THEMES[userThemeKey];
+            }
 
             gridEl.appendChild(card);
         });
@@ -4892,6 +4924,30 @@ function initSettingsUI() {
         serverSelect.addEventListener('change', (e) => {
         appSettings.startupServer = e.target.value;
         localStorage.setItem('settings', JSON.stringify(appSettings));
+        });
+    }
+
+    const voiceThemeSelect = document.getElementById('setting-voice-theme');
+    if (voiceThemeSelect) {
+        voiceThemeSelect.value = appSettings.voiceTheme || 'none';
+        
+        voiceThemeSelect.addEventListener('change', async (e) => {
+            let selectedTheme = e.target.value;
+
+            if (selectedTheme === 'admin' && !isAdmin) {
+                alert("Unauthorized theme selection.");
+                voiceThemeSelect.value = appSettings.voiceTheme || 'none';
+                return;
+            }
+
+            appSettings.voiceTheme = selectedTheme;
+            localStorage.setItem('settings', JSON.stringify(appSettings));
+
+            if (uid) {
+                await set(ref(db, `users/${uid}/voiceTheme`), selectedTheme, writeOptions());
+            }
+
+            applySettings('voiceTheme');
         });
     }
 }
